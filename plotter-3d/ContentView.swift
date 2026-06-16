@@ -8,14 +8,26 @@
 import SwiftUI
 
 struct ContentView: View {
+    
+    @State var last_point: CGPoint?
+    
+    @State var cam_pitch: Float = 0
+    @State var cam_yaw: Float = 0
+    
     var body: some View {
-        VStack {
-            Image(systemName: "globe")
-                .imageScale(.large)
-                .foregroundStyle(.tint)
-            Text("Hello, world!")
-        }
-        .padding()
+        MetalView(cam_pitch: cam_pitch, cam_yaw: cam_yaw)
+            .frame(width: 900, height: 900)
+            .gesture(
+                DragGesture()
+                    .onChanged { e in
+                        cam_yaw -= Float((e.location.x - (last_point ?? e.startLocation).x) / 900.0)
+                        cam_pitch += Float((e.location.y - (last_point ?? e.startLocation).y) / 900.0)
+                        last_point = e.location
+                    }
+                    .onEnded { _ in
+                        last_point = nil
+                    }
+            )
     }
 }
 
