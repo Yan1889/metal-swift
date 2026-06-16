@@ -14,7 +14,7 @@ struct MetalView: NSViewRepresentable {
     var cam_yaw: Float = 0
     
     func makeNSView(context: Context) -> some NSView {
-        let view = MTKView()
+        let view = MetalMtkView()
         context.coordinator.renderer = Renderer(view: view)
         return view
     }

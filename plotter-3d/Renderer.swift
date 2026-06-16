@@ -10,23 +10,24 @@ import MetalKit
 import simd
 
 class Renderer: NSObject, MTKViewDelegate {
-    let view: MTKView
+    private let view: MetalMtkView
     
-    let device: MTLDevice
-    let lib: MTLLibrary
-    let commandQueue: MTLCommandQueue
+    private let device: MTLDevice
+    private let lib: MTLLibrary
+    private let commandQueue: MTLCommandQueue
     
-    var renderPSO: MTLRenderPipelineState!
-    var vertexBuffer: MTLBuffer!
-    var indexBuffer: MTLBuffer!
+    private var renderPSO: MTLRenderPipelineState!
+    private var vertexBuffer: MTLBuffer!
+    private var indexBuffer: MTLBuffer!
     
-    var depthTexture: MTLTexture!
-    var depthState: MTLDepthStencilState!
+    private var depthTexture: MTLTexture!
+    private var depthState: MTLDepthStencilState!
     
-    var axes: [Line3d] = []
-    var bounding_box: [Line3d] = []
+    private var axes: [Line3d] = []
     
-    init(view: MTKView) {
+    private var zoom: Float = 1
+    
+    init(view: MetalMtkView) {
         self.view = view
         device = MTLCreateSystemDefaultDevice()!
         lib = device.makeDefaultLibrary()!
@@ -49,6 +50,7 @@ class Renderer: NSObject, MTKViewDelegate {
     
     func setupView() {
         view.delegate = self
+        view.renderer = self
         view.device = device
         view.colorPixelFormat = .bgra8Unorm
         view.clearColor = MTLClearColor(red: 0.3, green: 0.3, blue: 0.3, alpha: 1)
@@ -147,7 +149,7 @@ class Renderer: NSObject, MTKViewDelegate {
     }
     
     func setupBuffers() {
-        let resolution = 300 // 10x10
+        let resolution = 300
         
         let x_z_plane_points: [(Float, Float)] = (0..<resolution).flatMap { i in
             (0..<resolution).map { j in
@@ -161,14 +163,15 @@ class Renderer: NSObject, MTKViewDelegate {
             i * resolution + j
         }
         
-        let y_values = x_z_plane_points.map { (x, z) in f(x, z) }
+        let y_values = x_z_plane_points.map { (x, z) in f(x / zoom, z / zoom) }
         let min = y_values.min()!
         let max = y_values.max()!
         
         let vertices: [Vertex] = x_z_plane_points.map { (x, z) in
-            Vertex(
-                pos: SIMD4<Float>(x, f(x, z), z, 1),
-                col: brightColor((f(x, z) - min) / (max - min)),
+            let y = f(x / zoom, z / zoom)
+            return Vertex(
+                pos: SIMD4<Float>(x, y, z, 1),
+                col: brightColor((y - min) / (max - min)),
             )
         }
         
@@ -224,41 +227,16 @@ class Renderer: NSObject, MTKViewDelegate {
                 color: SIMD4<Float>(0, 0, 1, 1),
             )
         ]
-        
-        bounding_box = (0..<UInt(8))
-            .flatMap { n in
-                let x: Float = ((n >> 0) & 1) == 0 ? 1 : -1
-                let y: Float = ((n >> 1) & 1) == 0 ? 1 : -1
-                let z: Float = ((n >> 2) & 1) == 0 ? 1 : -1
-                
-                return [
-                    (SIMD3<Float>(x, y, z), SIMD3<Float>(-x,  y, z )),
-                    (SIMD3<Float>(x, y, z), SIMD3<Float>( x, -y, z )),
-                    (SIMD3<Float>(x, y, z), SIMD3<Float>( x,  y, -z)),
-                ]
-            }
-            .map { (start, end) in
-                Line3d(
-                    start: start,
-                    end: end,
-                    thickness: 0.003,
-                    device: device,
-                    corner_count: 8,
-                    color: SIMD4<Float>(0.5, 0.5, 0.5, 1),
-                )
-            }
-        
-        // stride(from: -1, through: 1, by: 0.5).flatMap { h in
+
         let h: Float = 0
-        stride(from: -1, through: 1, by: 0.5).flatMap { f in
+        stride(from: -1.5, through: 1.5, by: 0.2).flatMap { f in
             [
-                (SIMD3<Float>(f, h, 1), SIMD3<Float>( f, h, -1)),
-                (SIMD3<Float>(1, h, f), SIMD3<Float>(-1, h, f)),
+                (SIMD3<Float>(f  , h, 1.5), SIMD3<Float>(   f, h, -1.5)),
+                (SIMD3<Float>(1.5, h, f  ), SIMD3<Float>(-1.5, h, f)),
             ]
         }
-        // }
         .forEach { (start, end) in
-            bounding_box.append(Line3d(
+            axes.append(Line3d(
                 start: start,
                 end: end,
                 thickness: 0.003,
@@ -278,7 +256,7 @@ class Renderer: NSObject, MTKViewDelegate {
     // roll will not change and stay 0
     var cam_pitch: Float = 0
     var cam_yaw: Float = 0
-    var cam_dist: Float = 3
+    var cam_dist: Float = 5
     
     
     func draw(in view: MTKView) {
@@ -340,7 +318,6 @@ class Renderer: NSObject, MTKViewDelegate {
         )
         
         axes.forEach { $0.draw(encoder) }
-        bounding_box.forEach { $0.draw(encoder) }
         
         encoder.endEncoding()
         commandBuffer.present(draw)
@@ -350,7 +327,7 @@ class Renderer: NSObject, MTKViewDelegate {
     func f(_ x: Float, _ y: Float) -> Float {
         // sin(20 * (x * x + y * y).squareRoot())
         // sin(15 * x) + sin(15 * y)
-        sqrt(x * x + y * y) / sqrt(2)
+        x * x + y * y
     }
     
     func brightColor(_ t: Float) -> SIMD4<Float> {
