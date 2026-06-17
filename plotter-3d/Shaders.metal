@@ -91,14 +91,20 @@ kernel void generateIndices(constant KernelUniforms &uniforms [[buffer(0)]],
     // 1 quad = 2 triangles = 6 indices
     int startIdx = 6 * (i * resolution + j);
     
-    // triangle #1
-    buf[startIdx + 0] = (i + 0) * resolution + (j + 0);
-    buf[startIdx + 1] = (i + 1) * resolution + (j + 0);
-    buf[startIdx + 2] = (i + 1) * resolution + (j + 1);
-    // triangle #2
-    buf[startIdx + 3] = (i + 0) * resolution + (j + 0);
-    buf[startIdx + 4] = (i + 0) * resolution + (j + 1);
-    buf[startIdx + 5] = (i + 1) * resolution + (j + 1);
+    int diffs[6][2] = {
+        // triangle #1
+        {0, 0},
+        {1, 0},
+        {1, 1},
+        // triangle #2
+        {0, 0},
+        {0, 1},
+        {1, 1},
+    };
+    
+    for (int k = 0; k < 6; k++) {
+        buf[startIdx + k] = (i + diffs[k][0]) * resolution + (j + diffs[k][1]);
+    }
 }
 
 float4 brightColor(float t) {
