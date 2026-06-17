@@ -24,7 +24,8 @@ class Renderer: NSObject, MTKViewDelegate {
     private var depthState: MTLDepthStencilState!
     
     // mesh compute pipeline
-    private var computePSO: MTLComputePipelineState!
+    private var computePSO_vertices: MTLComputePipelineState!
+    private var computePSO_indices: MTLComputePipelineState!
     
     private var axes: [Line3d] = []
     
@@ -153,7 +154,8 @@ class Renderer: NSObject, MTKViewDelegate {
     }
     
     func setupComputePipeline() {
-        computePSO = try! device.makeComputePipelineState(function: lib.makeFunction(name: "generateMesh")!)
+        computePSO_vertices = try! device.makeComputePipelineState(function: lib.makeFunction(name: "generateMesh")!)
+        computePSO_indices = try! device.makeComputePipelineState(function: lib.makeFunction(name: "generateIndices")!)
     }
     
     func setupBuffers() {
@@ -176,54 +178,35 @@ class Renderer: NSObject, MTKViewDelegate {
             grid_line_width: grid_line_width,
         )
         
-        let max_thread_sqrt = Int(Float(computePSO.maxTotalThreadsPerThreadgroup).squareRoot())
-        let threads_per_grid = MTLSize(width: resolution, height: resolution, depth: 1)
+        assert(computePSO_vertices.maxTotalThreadsPerThreadgroup == computePSO_indices.maxTotalThreadsPerThreadgroup)
+        
+        let max_thread_sqrt = Int(Float(computePSO_vertices.maxTotalThreadsPerThreadgroup).squareRoot())
         let threads_per_group = MTLSize(width: max_thread_sqrt, height: max_thread_sqrt, depth: 1)
+        let threads_per_grid_vertex = MTLSize(width: resolution, height: resolution, depth: 1)
+        let threads_per_grid_index = MTLSize(width: resolution - 1, height: resolution - 1, depth: 1)
+        
         
         vertexBuffer = device.makeBuffer(length: resolution * resolution * MemoryLayout<Vertex>.stride)
+        indexBuffer = device.makeBuffer(length: (resolution - 1) * (resolution - 1) * 6 * 4)
 
         let commandBuffer = commandQueue.makeCommandBuffer()!
         let encoder = commandBuffer.makeComputeCommandEncoder()!
-        encoder.setComputePipelineState(computePSO)
+        
         encoder.setBytes(&uniforms, length: MemoryLayout<KernelUniforms>.size, index: 0)
+        
+        encoder.setComputePipelineState(computePSO_vertices)
         encoder.setBuffer(vertexBuffer, offset: 0, index: 1)
-        encoder.dispatchThreads(threads_per_grid, threadsPerThreadgroup: threads_per_group)
+        encoder.dispatchThreads(threads_per_grid_vertex, threadsPerThreadgroup: threads_per_group)
+        
+        encoder.setComputePipelineState(computePSO_indices)
+        encoder.setBuffer(indexBuffer, offset: 0, index: 1)
+        encoder.dispatchThreads(threads_per_grid_index, threadsPerThreadgroup: threads_per_group)
+        
         encoder.endEncoding()
         commandBuffer.commit()
         commandBuffer.waitUntilCompleted()
         
-        print("vertex buffer took \(clock.now - start)")
-        
-        start = clock.now
-        
-        func wrap(_ i: Int, _ j: Int) -> Int {
-            i * Int(uniforms.resolution) + j
-        }
-        
-        let range = 0..<Int(uniforms.resolution) - 1
-        
-        let indices: [UInt32] = range.flatMap { i in
-            range.flatMap { j in
-                [
-                    // triangle #1
-                    UInt32(wrap(i    , j    )),
-                    UInt32(wrap(i + 1, j    )),
-                    UInt32(wrap(i + 1, j + 1)),
-                    // triangle #2
-                    UInt32(wrap(i    , j    )),
-                    UInt32(wrap(i    , j + 1)),
-                    UInt32(wrap(i + 1, j + 1)),
-                ]
-            }
-        }
-        
-        indexBuffer = device.makeBuffer(
-            bytes: indices,
-            length: 4 * indices.count,
-            options: .storageModeShared,
-        )!
-        
-        print("index buffer took \(clock.now - start)")
+        print("vertex + index buffer generation took \(clock.now - start)")
         
         axes = [
             Line3d(

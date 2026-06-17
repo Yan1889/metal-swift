@@ -78,6 +78,28 @@ kernel void generateMesh(constant KernelUniforms &uniforms [[buffer(0)]],
     v.color = is_gray ? GRAY : ORANGE;
 }
 
+kernel void generateIndices(constant KernelUniforms &uniforms [[buffer(0)]],
+                            device uint *buf [[buffer(1)]],
+                            uint2 id [[thread_position_in_grid]]) {
+    // the only uniform we need here
+    int resolution = uniforms.resolution;
+    
+    int i = id.x;
+    int j = id.y;
+    
+    // each thread is responsible for one quad
+    // 1 quad = 2 triangles = 6 indices
+    int startIdx = 6 * (i * resolution + j);
+    
+    // triangle #1
+    buf[startIdx + 0] = (i + 0) * resolution + (j + 0);
+    buf[startIdx + 1] = (i + 1) * resolution + (j + 0);
+    buf[startIdx + 2] = (i + 1) * resolution + (j + 1);
+    // triangle #2
+    buf[startIdx + 3] = (i + 0) * resolution + (j + 0);
+    buf[startIdx + 4] = (i + 0) * resolution + (j + 1);
+    buf[startIdx + 5] = (i + 1) * resolution + (j + 1);
+}
 
 float4 brightColor(float t) {
     // Clamp just in case
