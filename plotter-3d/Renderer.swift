@@ -149,7 +149,9 @@ class Renderer: NSObject, MTKViewDelegate {
     }
     
     func setupBuffers() {
-        let resolution = 300
+        let resolution: Int = 3001
+        let grid_spacing: Float = 0.1
+        let grid_line_width: Float = 0.003
         
         let x_z_plane_points: [(Float, Float)] = (0..<resolution).flatMap { i in
             (0..<resolution).map { j in
@@ -169,9 +171,18 @@ class Renderer: NSObject, MTKViewDelegate {
         
         let vertices: [Vertex] = x_z_plane_points.map { (x, z) in
             let y = f(x / zoom, z / zoom)
+            
+            var dx = abs(x - floor(x / grid_spacing) * grid_spacing)
+            var dz = abs(z - floor(z / grid_spacing) * grid_spacing)
+            dx = .minimum(dx, grid_spacing - dx)
+            dz = .minimum(dz, grid_spacing - dz)
+            let is_gray = dx < grid_line_width || dz < grid_line_width
+            
+            let GRAY = SIMD4<Float>(0.5, 0.5, 0.5, 1)
+            
             return Vertex(
                 pos: SIMD4<Float>(x, y, z, 1),
-                col: brightColor((y - min) / (max - min)),
+                col: is_gray ? GRAY : brightColor((y - min) / (max - min)),
             )
         }
         
