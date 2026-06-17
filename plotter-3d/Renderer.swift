@@ -160,11 +160,11 @@ class Renderer: NSObject, MTKViewDelegate {
     
     func setupBuffers() {
         let clock = ContinuousClock()
-        var start = clock.now
+        let start = clock.now
         
-        let resolution: Int = 3001
-        let grid_spacing: Float = 0.1
-        let grid_line_width: Float = 0.003
+        let resolution: Int = 500
+        let grid_spacing: Float = 0.2
+        let grid_line_width: Float = 0.005
                 
         struct KernelUniforms {
             let resolution: Int32
@@ -206,7 +206,9 @@ class Renderer: NSObject, MTKViewDelegate {
         commandBuffer.commit()
         commandBuffer.waitUntilCompleted()
         
-        print("vertex + index buffer generation took \(clock.now - start)")
+        print("buffer generation ~ \(clock.now - start)")
+        print("sizeof(vertex buffer) ~ \(vertexBuffer.length / 1_000_000)MB")
+        print("sizeof(index buffer) ~ \(indexBuffer.length / 1_000_000)MB")
         
         axes = [
             Line3d(

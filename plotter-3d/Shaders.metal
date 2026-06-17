@@ -64,8 +64,8 @@ kernel void generateMesh(constant KernelUniforms &uniforms [[buffer(0)]],
     device VertexIn &v = buf[id.x * resolution + id.y];
     
     // coordinate for this vertex
-    float x = 2.0 * id.x / resolution - 1.0;
-    float z = 2.0 * id.y / resolution - 1.0;
+    float x = 2.0 * id.x / (resolution - 1) - 1.0;
+    float z = 2.0 * id.y / (resolution - 1) - 1.0;
     float y = function_to_graph(x, z);
     v.pos = float4(x, y, z, 1.0);
     
@@ -74,7 +74,7 @@ kernel void generateMesh(constant KernelUniforms &uniforms [[buffer(0)]],
     float dz = abs(z - floor(z / grid_spacing) * grid_spacing);
     dx = min(dx, grid_spacing - dx);
     dz = min(dz, grid_spacing - dz);
-    bool is_gray = dx < grid_line_width || dz < grid_line_width;
+    bool is_gray = min(dx, dz) < grid_line_width;
     v.color = is_gray ? GRAY : ORANGE;
 }
 
@@ -89,7 +89,7 @@ kernel void generateIndices(constant KernelUniforms &uniforms [[buffer(0)]],
     
     // each thread is responsible for one quad
     // 1 quad = 2 triangles = 6 indices
-    int startIdx = 6 * (i * resolution + j);
+    int startIdx = 6 * (i * (resolution - 1) + j);
     
     int diffs[6][2] = {
         // triangle #1
