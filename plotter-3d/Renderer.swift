@@ -16,12 +16,15 @@ class Renderer: NSObject, MTKViewDelegate {
     private let lib: MTLLibrary
     private let commandQueue: MTLCommandQueue
     
+    // render pipeline
     private var renderPSO: MTLRenderPipelineState!
     private var vertexBuffer: MTLBuffer!
     private var indexBuffer: MTLBuffer!
-    
     private var depthTexture: MTLTexture!
     private var depthState: MTLDepthStencilState!
+    
+    // mesh compute pipeline
+    private var computePSO: MTLComputePipelineState!
     
     private var axes: [Line3d] = []
     
@@ -36,6 +39,7 @@ class Renderer: NSObject, MTKViewDelegate {
         super.init()
         
         setupView()
+        setupComputePipeline()
         setupRenderPipeline()
         setupBuffers()
         
@@ -148,46 +152,58 @@ class Renderer: NSObject, MTKViewDelegate {
         renderPSO = try! device.makeRenderPipelineState(descriptor: pipelineDescriptor)
     }
     
+    func setupComputePipeline() {
+        computePSO = try! device.makeComputePipelineState(function: lib.makeFunction(name: "generateMesh")!)
+    }
+    
     func setupBuffers() {
+        let clock = ContinuousClock()
+        var start = clock.now
+        
         let resolution: Int = 3001
         let grid_spacing: Float = 0.1
         let grid_line_width: Float = 0.003
-        
-        let x_z_plane_points: [(Float, Float)] = (0..<resolution).flatMap { i in
-            (0..<resolution).map { j in
-                let x = 2 * Float(i) / Float(resolution - 1) - 1
-                let z = 2 * Float(j) / Float(resolution - 1) - 1
-                return (x, z)
-            }
+                
+        struct KernelUniforms {
+            let resolution: Int32
+            let grid_spacing: Float
+            let grid_line_width: Float
         }
+        
+        var uniforms = KernelUniforms(
+            resolution: Int32(resolution),
+            grid_spacing: grid_spacing,
+            grid_line_width: grid_line_width,
+        )
+        
+        let max_thread_sqrt = Int(Float(computePSO.maxTotalThreadsPerThreadgroup).squareRoot())
+        let threads_per_grid = MTLSize(width: resolution, height: resolution, depth: 1)
+        let threads_per_group = MTLSize(width: max_thread_sqrt, height: max_thread_sqrt, depth: 1)
+        
+        vertexBuffer = device.makeBuffer(length: resolution * resolution * MemoryLayout<Vertex>.stride)
+
+        let commandBuffer = commandQueue.makeCommandBuffer()!
+        let encoder = commandBuffer.makeComputeCommandEncoder()!
+        encoder.setComputePipelineState(computePSO)
+        encoder.setBytes(&uniforms, length: MemoryLayout<KernelUniforms>.size, index: 0)
+        encoder.setBuffer(vertexBuffer, offset: 0, index: 1)
+        encoder.dispatchThreads(threads_per_grid, threadsPerThreadgroup: threads_per_group)
+        encoder.endEncoding()
+        commandBuffer.commit()
+        commandBuffer.waitUntilCompleted()
+        
+        print("vertex buffer took \(clock.now - start)")
+        
+        start = clock.now
         
         func wrap(_ i: Int, _ j: Int) -> Int {
-            i * resolution + j
+            i * Int(uniforms.resolution) + j
         }
         
-        let y_values = x_z_plane_points.map { (x, z) in f(x / zoom, z / zoom) }
-        let min = y_values.min()!
-        let max = y_values.max()!
+        let range = 0..<Int(uniforms.resolution) - 1
         
-        let vertices: [Vertex] = x_z_plane_points.map { (x, z) in
-            let y = f(x / zoom, z / zoom)
-            
-            var dx = abs(x - floor(x / grid_spacing) * grid_spacing)
-            var dz = abs(z - floor(z / grid_spacing) * grid_spacing)
-            dx = .minimum(dx, grid_spacing - dx)
-            dz = .minimum(dz, grid_spacing - dz)
-            let is_gray = dx < grid_line_width || dz < grid_line_width
-            
-            let GRAY = SIMD4<Float>(0.5, 0.5, 0.5, 1)
-            
-            return Vertex(
-                pos: SIMD4<Float>(x, y, z, 1),
-                col: is_gray ? GRAY : brightColor((y - min) / (max - min)),
-            )
-        }
-        
-        let indices: [UInt32] = (0..<resolution - 1).flatMap { i in
-            (0..<resolution - 1).flatMap { j in
+        let indices: [UInt32] = range.flatMap { i in
+            range.flatMap { j in
                 [
                     // triangle #1
                     UInt32(wrap(i    , j    )),
@@ -201,16 +217,13 @@ class Renderer: NSObject, MTKViewDelegate {
             }
         }
         
-        vertexBuffer = device.makeBuffer(
-            bytes: vertices,
-            length: MemoryLayout<Vertex>.stride * vertices.count,
-            options: .storageModeShared,
-        )!
         indexBuffer = device.makeBuffer(
             bytes: indices,
             length: 4 * indices.count,
             options: .storageModeShared,
         )!
+        
+        print("index buffer took \(clock.now - start)")
         
         axes = [
             Line3d(

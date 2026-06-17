@@ -40,23 +40,42 @@ struct KernelUniforms {
     float grid_line_width;
 };
 
-[[visible]] float function_to_graph(float x, float z);
+
 
 float4 brightColor(float t);
 
 #define GRAY float4(0.5, 0.5, 0.5, 1.0)
+#define ORANGE float4(1.0, 0.6, 0.0, 1.0)
+
+float function_to_graph(float x, float z) {
+    return x * x + z * z;
+}
 
 kernel void generateMesh(constant KernelUniforms &uniforms [[buffer(0)]],
                          device VertexIn *buf [[buffer(1)]],
                          uint2 id [[thread_position_in_grid]]) {
-    int x = id.x;
-    int z = id.y;
-    int y = function_to_graph(x, z);
     
-    int idx = z * uniforms.resolution + y;
-    device VertexIn &v = buf[idx];
-    v.color = GRAY;
+    // unpack uniforms
+    int resolution = uniforms.resolution;
+    float grid_spacing = uniforms.grid_spacing;
+    float grid_line_width = uniforms.grid_line_width;
+    
+    // vertex for this thread
+    device VertexIn &v = buf[id.x * resolution + id.y];
+    
+    // coordinate for this vertex
+    float x = 2.0 * id.x / resolution - 1.0;
+    float z = 2.0 * id.y / resolution - 1.0;
+    float y = function_to_graph(x, z);
     v.pos = float4(x, y, z, 1.0);
+    
+    // color for this vertex
+    float dx = abs(x - floor(x / grid_spacing) * grid_spacing);
+    float dz = abs(z - floor(z / grid_spacing) * grid_spacing);
+    dx = min(dx, grid_spacing - dx);
+    dz = min(dz, grid_spacing - dz);
+    bool is_gray = dx < grid_line_width || dz < grid_line_width;
+    v.color = is_gray ? GRAY : ORANGE;
 }
 
 
