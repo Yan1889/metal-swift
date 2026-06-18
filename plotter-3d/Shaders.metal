@@ -34,13 +34,11 @@ fragment float4 fragmentShader(VertexOut v [[stage_in]]) {
     return v.color;
 }
 
-struct KernelUniforms {
+struct KernelUniforms_Mesh {
     int resolution;
     float grid_spacing;
     float grid_line_width;
 };
-
-
 
 float4 brightColor(float t);
 
@@ -51,8 +49,9 @@ float function_to_graph(float x, float z) {
     return x * x + z * z;
 }
 
-kernel void generateMesh(constant KernelUniforms &uniforms [[buffer(0)]],
-                         device VertexIn *buf [[buffer(1)]],
+kernel void generateMesh(constant KernelUniforms_Mesh &uniforms [[buffer(0)]],
+                         device VertexIn *vertices [[buffer(1)]],
+                         device float2 *min_max [[buffer(2)]],
                          uint2 id [[thread_position_in_grid]]) {
     
     // unpack uniforms
@@ -61,13 +60,15 @@ kernel void generateMesh(constant KernelUniforms &uniforms [[buffer(0)]],
     float grid_line_width = uniforms.grid_line_width;
     
     // vertex for this thread
-    device VertexIn &v = buf[id.x * resolution + id.y];
+    int idx = id.y * resolution + id.x;
+    device VertexIn &v = vertices[idx];
     
     // coordinate for this vertex
     float x = 2.0 * id.x / (resolution - 1) - 1.0;
     float z = 2.0 * id.y / (resolution - 1) - 1.0;
     float y = function_to_graph(x, z);
     v.pos = float4(x, y, z, 1.0);
+    min_max[idx] = float2(y, y);
     
     // color for this vertex
     float dx = abs(x - floor(x / grid_spacing) * grid_spacing);
@@ -78,14 +79,11 @@ kernel void generateMesh(constant KernelUniforms &uniforms [[buffer(0)]],
     v.color = is_gray ? GRAY : ORANGE;
 }
 
-kernel void generateIndices(constant KernelUniforms &uniforms [[buffer(0)]],
+kernel void generateIndices(constant int &resolution [[buffer(0)]],
                             device uint *buf [[buffer(1)]],
                             uint2 id [[thread_position_in_grid]]) {
-    // the only uniform we need here
-    int resolution = uniforms.resolution;
-    
-    int i = id.x;
-    int j = id.y;
+    int i = id.y;
+    int j = id.x;
     
     // each thread is responsible for one quad
     // 1 quad = 2 triangles = 6 indices
@@ -117,4 +115,30 @@ float4 brightColor(float t) {
     float b = 0.5 + 0.5 * cos(2.0 * M_PI_F * (x + 2.0/3.0));
     
     return float4(r, g, b, 1.0);
+}
+
+kernel void reduceArray(constant int &entries [[buffer(0)]],
+                        constant float2 *src [[buffer(1)]],
+                        device float2 *dest [[buffer(2)]],
+                        uint id [[thread_position_in_grid]]) {
+    if (2 * id + 1 == uint(entries)) {
+        // `2 * id` is the last entry in the array
+        dest[id] = src[2 * id];
+    } else {
+        float mini = min(src[2 * id][0], src[2 * id + 1][0]);
+        float maxi = max(src[2 * id][1], src[2 * id + 1][1]);
+        dest[id] = float2(mini, maxi);
+    }
+}
+
+kernel void colorVertices(constant float2 *min_max [[buffer(0)]],
+                          constant int &resolution [[buffer(1)]],
+                          device VertexIn *vertices [[buffer(2)]],
+                          uint2 id [[thread_position_in_grid]]) {
+    device VertexIn &v = vertices[id.y * resolution + id.x];
+    float min_y = min_max[0][0];
+    float max_y = min_max[0][1];
+    if (!all(v.color == float4(0.5, 0.5, 0.5, 1.0))) {
+        v.color = brightColor((v.pos.y - min_y) / (max_y - min_y));
+    }
 }

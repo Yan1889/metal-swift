@@ -5,9 +5,11 @@
 //  Created by Yan Amin on 13.06.26.
 //
 
+import Foundation
 import MetalKit
 
 import simd
+
 
 class Renderer: NSObject, MTKViewDelegate {
     private let view: MetalMtkView
@@ -26,6 +28,8 @@ class Renderer: NSObject, MTKViewDelegate {
     // mesh compute pipeline
     private var computePSO_vertices: MTLComputePipelineState!
     private var computePSO_indices: MTLComputePipelineState!
+    private var computePSO_reduceArray: MTLComputePipelineState!
+    private var computePSO_colorVertices: MTLComputePipelineState!
     
     private var axes: [Line3d] = []
     
@@ -156,18 +160,23 @@ class Renderer: NSObject, MTKViewDelegate {
     func setupComputePipeline() {
         computePSO_vertices = try! device.makeComputePipelineState(function: lib.makeFunction(name: "generateMesh")!)
         computePSO_indices = try! device.makeComputePipelineState(function: lib.makeFunction(name: "generateIndices")!)
+        computePSO_reduceArray = try! device.makeComputePipelineState(function: lib.makeFunction(name: "reduceArray")!)
+        computePSO_colorVertices = try! device.makeComputePipelineState(function: lib.makeFunction(name: "colorVertices")!)
     }
     
     func setupBuffers() {
         let clock = ContinuousClock()
         let start = clock.now
         
-        let resolution: Int = 500
+        let resolution: Int = 1000
+        let vertex_count: Int = resolution * resolution
+        let quad_count: Int = (resolution - 1) * (resolution - 1)
+        
         let grid_spacing: Float = 0.2
         let grid_line_width: Float = 0.005
-                
+        
         struct KernelUniforms {
-            let resolution: Int32
+            var resolution: Int32
             let grid_spacing: Float
             let grid_line_width: Float
         }
@@ -177,31 +186,66 @@ class Renderer: NSObject, MTKViewDelegate {
             grid_spacing: grid_spacing,
             grid_line_width: grid_line_width,
         )
+        let max_threads = computePSO_vertices.threadExecutionWidth
+        let max_threads_sqrt = Int(Float(max_threads).squareRoot())
+        let threads_per_group_1d =    MTLSize(width: max_threads     , height: 1               , depth: 1)
+        let threads_per_group_2d =    MTLSize(width: max_threads_sqrt, height: max_threads_sqrt, depth: 1)
+        let threads_per_grid_vertex = MTLSize(width: resolution      , height: resolution      , depth: 1)
+        let threads_per_grid_index =  MTLSize(width: resolution - 1  , height: resolution - 1  , depth: 1)
         
-        assert(computePSO_vertices.maxTotalThreadsPerThreadgroup == computePSO_indices.maxTotalThreadsPerThreadgroup)
+        let minMaxBufA = device.makeBuffer(length: 2 * 4 * vertex_count)!
+        let minMaxBufB = device.makeBuffer(length: 2 * 4 * vertex_count)!
+        var is_A_src = true
         
-        let max_thread_sqrt = Int(Float(computePSO_vertices.maxTotalThreadsPerThreadgroup).squareRoot())
-        let threads_per_group = MTLSize(width: max_thread_sqrt, height: max_thread_sqrt, depth: 1)
-        let threads_per_grid_vertex = MTLSize(width: resolution, height: resolution, depth: 1)
-        let threads_per_grid_index = MTLSize(width: resolution - 1, height: resolution - 1, depth: 1)
+        vertexBuffer = device.makeBuffer(length: vertex_count * MemoryLayout<Vertex>.stride)
+        indexBuffer = device.makeBuffer(length: quad_count * 6 * 4)
         
-        
-        vertexBuffer = device.makeBuffer(length: resolution * resolution * MemoryLayout<Vertex>.stride)
-        indexBuffer = device.makeBuffer(length: (resolution - 1) * (resolution - 1) * 6 * 4)
-
         let commandBuffer = commandQueue.makeCommandBuffer()!
         let encoder = commandBuffer.makeComputeCommandEncoder()!
         
-        encoder.setBytes(&uniforms, length: MemoryLayout<KernelUniforms>.size, index: 0)
-        
+        // generate the vertices
         encoder.setComputePipelineState(computePSO_vertices)
+        encoder.setBytes(&uniforms, length: MemoryLayout<KernelUniforms>.size, index: 0)
         encoder.setBuffer(vertexBuffer, offset: 0, index: 1)
-        encoder.dispatchThreads(threads_per_grid_vertex, threadsPerThreadgroup: threads_per_group)
+        encoder.setBuffer(minMaxBufA, offset: 0, index: 2)
+        encoder.dispatchThreads(threads_per_grid_vertex, threadsPerThreadgroup: threads_per_group_2d)
         
+        // generate the indices
         encoder.setComputePipelineState(computePSO_indices)
+        encoder.setBytes(&uniforms.resolution, length: 4, index: 0)
         encoder.setBuffer(indexBuffer, offset: 0, index: 1)
-        encoder.dispatchThreads(threads_per_grid_index, threadsPerThreadgroup: threads_per_group)
+        encoder.dispatchThreads(threads_per_grid_index, threadsPerThreadgroup: threads_per_group_2d)
+
+        // get the min and max values for y in the vertex array
+        // reduce the min/max array until only one entry is left
+        var min_max_entries = Int32(vertex_count)
+        while min_max_entries > 1 {
+            
+            min_max_entries = (min_max_entries + 1) / 2
+            let threads_per_grid = MTLSize(width: Int(min_max_entries), height: 1, depth: 1)
+
+            encoder.setComputePipelineState(computePSO_reduceArray)
+            encoder.setBytes(&min_max_entries, length: 4, index: 0)
+
+            if is_A_src {
+                encoder.setBuffer(minMaxBufA, offset: 0, index: 1)
+                encoder.setBuffer(minMaxBufB, offset: 0, index: 2)
+                encoder.dispatchThreads(threads_per_grid, threadsPerThreadgroup: threads_per_group_1d)
+            } else {
+                encoder.setBuffer(minMaxBufB, offset: 0, index: 1)
+                encoder.setBuffer(minMaxBufA, offset: 0, index: 2)
+                encoder.dispatchThreads(threads_per_grid, threadsPerThreadgroup: threads_per_group_1d)
+            }
+            
+            is_A_src.toggle()
+        }
         
+        encoder.setComputePipelineState(computePSO_colorVertices)
+        encoder.setBuffer(is_A_src ? minMaxBufA : minMaxBufB, offset: 0, index: 0)
+        encoder.setBytes(&uniforms.resolution, length: 4, index: 1)
+        encoder.setBuffer(vertexBuffer, offset: 0, index: 2)
+        encoder.dispatchThreads(threads_per_grid_vertex, threadsPerThreadgroup: threads_per_group_2d)
+
         encoder.endEncoding()
         commandBuffer.commit()
         commandBuffer.waitUntilCompleted()
