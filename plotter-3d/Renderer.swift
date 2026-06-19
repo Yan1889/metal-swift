@@ -20,8 +20,10 @@ class Renderer: NSObject, MTKViewDelegate {
     
     // render pipeline
     private var renderPSO: MTLRenderPipelineState!
-    private var vertexBuffer: MTLBuffer!
-    private var indexBuffer: MTLBuffer!
+    private var vertexBuffer_graph: MTLBuffer!
+    private var indexBuffer_graph: MTLBuffer!
+    private var vertexBuffer_grid: MTLBuffer!
+    private var indexBuffer_grid: MTLBuffer!
     private var depthTexture: MTLTexture!
     private var depthState: MTLDepthStencilState!
     
@@ -29,6 +31,7 @@ class Renderer: NSObject, MTKViewDelegate {
     private var computePSO_vertices: MTLComputePipelineState!
     private var computePSO_reduceArray: MTLComputePipelineState!
     private var computePSO_colorVertices: MTLComputePipelineState!
+    private var computePSO_grid: MTLComputePipelineState!
     
     private var axes: [Line3d] = []
     
@@ -160,35 +163,40 @@ class Renderer: NSObject, MTKViewDelegate {
         computePSO_vertices = try! device.makeComputePipelineState(function: lib.makeFunction(name: "generateMesh")!)
         computePSO_reduceArray = try! device.makeComputePipelineState(function: lib.makeFunction(name: "reduceArray")!)
         computePSO_colorVertices = try! device.makeComputePipelineState(function: lib.makeFunction(name: "colorVertices")!)
+        computePSO_grid = try! device.makeComputePipelineState(function: lib.makeFunction(name: "generateGrid")!)
     }
     
     func setupBuffers() {
         let clock = ContinuousClock()
         let start = clock.now
         
-        let resolution: Int = 5
-        let vertex_count: Int = resolution * resolution
-        let quad_count: Int = (resolution - 1) * (resolution - 1)
+        let resolution:      Int = 300
+        var grid_line_count: Int = 10
+        let vertex_count_graph: Int = resolution            * resolution
+        let vertex_count_grid:  Int = grid_line_count       * grid_line_count * 4
+        let quad_count_graph:   Int = (resolution - 1)      * (resolution - 1)
+        let quad_count_grid:    Int = grid_line_count       * grid_line_count
         
-        let grid_spacing: Float = 0.2
-        let grid_line_width: Float = 0.005
         
         // variables to pass to shaders
         var resolution_int32 = Int32(resolution)
+        var grid_line_width: Float = 0.003
         
         let max_threads = computePSO_vertices.threadExecutionWidth
         let max_threads_sqrt = Int(Float(max_threads).squareRoot())
-        let threads_per_group_1d =    MTLSize(width: max_threads     , height: 1               , depth: 1)
-        let threads_per_group_2d =    MTLSize(width: max_threads_sqrt, height: max_threads_sqrt, depth: 1)
-        let threads_per_grid_vertex = MTLSize(width: resolution      , height: resolution      , depth: 1)
-        let threads_per_grid_index =  MTLSize(width: resolution - 1  , height: resolution - 1  , depth: 1)
+        let threads_per_group_1d   = MTLSize(width: max_threads     , height: 1               , depth: 1)
+        let threads_per_group_2d   = MTLSize(width: max_threads_sqrt, height: max_threads_sqrt, depth: 1)
+        let threads_per_grid_graph = MTLSize(width: resolution      , height: resolution      , depth: 1)
+        let threads_per_grid_grid  = MTLSize(width: grid_line_count , height: grid_line_count , depth: 1)
         
-        let minMaxBufA = device.makeBuffer(length: 2 * 4 * vertex_count)!
-        let minMaxBufB = device.makeBuffer(length: 2 * 4 * vertex_count)!
+        let minMaxBufA = device.makeBuffer(length: 2 * 4 * vertex_count_graph)!
+        let minMaxBufB = device.makeBuffer(length: 2 * 4 * vertex_count_graph)!
         var is_A_src = true
         
-        vertexBuffer = device.makeBuffer(length: vertex_count * MemoryLayout<Vertex>.stride)
-        indexBuffer = device.makeBuffer(length: quad_count * 6 * 4)
+        vertexBuffer_graph = device.makeBuffer(length: vertex_count_graph * MemoryLayout<Vertex>.stride)
+        vertexBuffer_grid  = device.makeBuffer(length: vertex_count_grid  * MemoryLayout<Vertex>.stride)
+        indexBuffer_graph  = device.makeBuffer(length: quad_count_graph * 6 * 4)
+        indexBuffer_grid   = device.makeBuffer(length: quad_count_grid  * 2 * 6 * 4)
         
         let commandBuffer = commandQueue.makeCommandBuffer()!
         let encoder = commandBuffer.makeComputeCommandEncoder()!
@@ -196,14 +204,22 @@ class Renderer: NSObject, MTKViewDelegate {
         // generate the vertices
         encoder.setComputePipelineState(computePSO_vertices)
         encoder.setBytes(&resolution_int32, length: 4, index: 0)
-        encoder.setBuffer(vertexBuffer, offset: 0, index: 1)
-        encoder.setBuffer(indexBuffer, offset: 0, index: 2)
+        encoder.setBuffer(vertexBuffer_graph, offset: 0, index: 1)
+        encoder.setBuffer(indexBuffer_graph, offset: 0, index: 2)
         encoder.setBuffer(minMaxBufA, offset: 0, index: 3)
-        encoder.dispatchThreads(threads_per_grid_vertex, threadsPerThreadgroup: threads_per_group_2d)
+        encoder.dispatchThreads(threads_per_grid_graph, threadsPerThreadgroup: threads_per_group_2d)
         
+        // generate the grid
+        encoder.setComputePipelineState(computePSO_grid)
+        encoder.setBytes(&grid_line_count,  length: 4, index: 0)
+        encoder.setBytes(&grid_line_width,  length: 4, index: 1)
+        encoder.setBuffer(vertexBuffer_grid, offset: 0, index: 2)
+        encoder.setBuffer(indexBuffer_grid,  offset: 0, index: 3)
+        encoder.dispatchThreads(threads_per_grid_grid, threadsPerThreadgroup: threads_per_group_2d)
+
         // get the min and max values for y in the vertex array
         // reduce the min/max array until only one entry is left
-        var min_max_entries = Int32(vertex_count)
+        var min_max_entries = Int32(vertex_count_graph)
         while min_max_entries > 1 {
             
             min_max_entries = (min_max_entries + 1) / 2
@@ -228,16 +244,16 @@ class Renderer: NSObject, MTKViewDelegate {
         encoder.setComputePipelineState(computePSO_colorVertices)
         encoder.setBuffer(is_A_src ? minMaxBufA : minMaxBufB, offset: 0, index: 0)
         encoder.setBytes(&resolution_int32, length: 4, index: 1)
-        encoder.setBuffer(vertexBuffer, offset: 0, index: 2)
-        encoder.dispatchThreads(threads_per_grid_vertex, threadsPerThreadgroup: threads_per_group_2d)
+        encoder.setBuffer(vertexBuffer_graph, offset: 0, index: 2)
+        encoder.dispatchThreads(threads_per_grid_graph, threadsPerThreadgroup: threads_per_group_2d)
 
         encoder.endEncoding()
         commandBuffer.commit()
         commandBuffer.waitUntilCompleted()
         
         print("buffer generation ~ \(clock.now - start)")
-        print("sizeof(vertex buffer) ~ \(vertexBuffer.length / 1_000_000)MB")
-        print("sizeof(index buffer) ~ \(indexBuffer.length / 1_000_000)MB")
+        print("sizeof(vertex buffer) ~ \(vertexBuffer_graph.length / 1_000_000)MB")
+        print("sizeof(index buffer) ~ \(indexBuffer_graph.length / 1_000_000)MB")
         
         axes = [
             Line3d(
@@ -341,7 +357,7 @@ class Renderer: NSObject, MTKViewDelegate {
         encoder.setRenderPipelineState(renderPSO)
         encoder.setDepthStencilState(depthState)
         
-        encoder.setVertexBuffer(vertexBuffer, offset: 0, index: 0)
+        encoder.setVertexBuffer(vertexBuffer_graph, offset: 0, index: 0)
         encoder.setVertexBytes(
             &uniforms_vertex,
             length: MemoryLayout<VertexUniforms>.stride,
@@ -349,10 +365,19 @@ class Renderer: NSObject, MTKViewDelegate {
         )
         encoder.drawIndexedPrimitives(
             type: .triangle,
-            indexCount: indexBuffer.length / 4,
+            indexCount: indexBuffer_graph.length / 4,
             indexType: .uint32,
-            indexBuffer: indexBuffer,
+            indexBuffer: indexBuffer_graph,
             indexBufferOffset: 0,
+        )
+        
+        encoder.setVertexBuffer(vertexBuffer_grid, offset: 0, index: 0)
+        encoder.drawIndexedPrimitives(
+            type: .triangle,
+            indexCount: indexBuffer_grid.length / 4,
+            indexType: .uint32,
+            indexBuffer: indexBuffer_grid,
+            indexBufferOffset: 0
         )
         
         axes.forEach { $0.draw(encoder) }

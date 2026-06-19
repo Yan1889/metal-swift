@@ -45,6 +45,17 @@ float function_to_graph(float x, float z) {
     // return sin(15 * x) + sin(15 * z);
 }
 
+constant int quad_indices[6][2] = {
+    // triangle #1
+    {0, 0},
+    {1, 0},
+    {1, 1},
+    // triangle #2
+    {0, 0},
+    {0, 1},
+    {1, 1},
+};
+
 kernel void generateMesh(constant int    &resolution [[buffer(0)]],
                          device VertexIn *vertices   [[buffer(1)]],
                          device uint     *indices    [[buffer(2)]],
@@ -73,20 +84,64 @@ kernel void generateMesh(constant int    &resolution [[buffer(0)]],
     // each thread is responsible for one quad
     // 1 quad = 2 triangles = 6 indices
     int startIdx = 6 * (i * (resolution - 1) + j);
-    int diffs[6][2] = {
-        // triangle #1
-        {0, 0},
-        {1, 0},
-        {1, 1},
-        // triangle #2
-        {0, 0},
-        {0, 1},
-        {1, 1},
-    };
-    
+
     for (int k = 0; k < 6; k++) {
-        indices[startIdx + k] = (i + diffs[k][0]) * resolution + (j + diffs[k][1]);
+        indices[startIdx + k] = (i + quad_indices[k][0]) * resolution + (j + quad_indices[k][1]);
     }
+}
+
+kernel void generateGrid(constant int      &line_count   [[buffer(0)]],
+                         constant float    &line_width   [[buffer(1)]],
+                         device   VertexIn *vertices     [[buffer(2)]],
+                         device   uint     *indices      [[buffer(3)]],
+                         uint2 id [[thread_position_in_grid]]) {
+    int i = id.y;
+    int j = id.x;
+    
+    // 4 vertices for every thread (`vs[0...3]`)
+    device VertexIn *vs = vertices + 4 * (i * line_count + j);
+    
+    float x = 2.0 * id.x / (line_count - 1.0) - 1.0;
+    float z = 2.0 * id.y / (line_count - 1.0) - 1.0;
+    
+    float y = function_to_graph(x, z) + 0.01;
+    vs[0].pos = float4(x - line_width, y, z - line_width, 1);
+    vs[1].pos = float4(x + line_width, y, z - line_width, 1);
+    vs[2].pos = float4(x + line_width, y, z + line_width, 1);
+    vs[3].pos = float4(x - line_width, y, z + line_width, 1);
+    
+    vs[0].color = float4(0, 0, 0, 1);
+    vs[1].color = float4(0, 0, 0, 1);
+    vs[2].color = float4(0, 0, 0, 1);
+    vs[3].color = float4(0, 0, 0, 1);
+    
+    // indices
+    if (i == line_count - 1 || j == line_count - 1) {
+        return;
+    }
+    
+    device uint *startIndex = indices + 12 * (i * line_count + j);
+    
+    int start0 = 4 * ((i + 0) * line_count + j + 0);
+    int startR = 4 * ((i + 0) * line_count + j + 1);
+    int startU = 4 * ((i + 1) * line_count + j + 0);
+    
+    // quad #1, triangle #1
+    startIndex[0] = start0 + 0;
+    startIndex[1] = startR + 0;
+    startIndex[2] = startR + 3;
+    // quad #1, triangle #2
+    startIndex[3] = start0 + 0;
+    startIndex[4] = start0 + 3;
+    startIndex[5] = startR + 3;
+    // quad #2, triangle #1
+    startIndex[6] = start0 + 2;
+    startIndex[7] = startU + 1;
+    startIndex[8] = startU + 0;
+    // quad #2, triangle #2
+    startIndex[9]  = start0 + 2;
+    startIndex[10] = start0 + 3;
+    startIndex[11] = startU + 0;
 }
 
 float4 brightColor(float t) {
