@@ -34,12 +34,6 @@ fragment float4 fragmentShader(VertexOut v [[stage_in]]) {
     return v.color;
 }
 
-struct KernelUniforms_Mesh {
-    int resolution;
-    float grid_spacing;
-    float grid_line_width;
-};
-
 float4 brightColor(float t);
 
 #define GRAY float4(0.5, 0.5, 0.5, 1.0)
@@ -47,18 +41,14 @@ float4 brightColor(float t);
 
 float function_to_graph(float x, float z) {
     return x * x + z * z;
+    // return sin(20 * (x * x + z * z));
+    // return sin(15 * x) + sin(15 * z);
 }
 
-kernel void generateMesh(constant KernelUniforms_Mesh &uniforms [[buffer(0)]],
+kernel void generateMesh(constant int &resolution [[buffer(0)]],
                          device VertexIn *vertices [[buffer(1)]],
                          device float2 *min_max [[buffer(2)]],
                          uint2 id [[thread_position_in_grid]]) {
-    
-    // unpack uniforms
-    int resolution = uniforms.resolution;
-    float grid_spacing = uniforms.grid_spacing;
-    float grid_line_width = uniforms.grid_line_width;
-    
     // vertex for this thread
     int idx = id.y * resolution + id.x;
     device VertexIn &v = vertices[idx];
@@ -70,13 +60,7 @@ kernel void generateMesh(constant KernelUniforms_Mesh &uniforms [[buffer(0)]],
     v.pos = float4(x, y, z, 1.0);
     min_max[idx] = float2(y, y);
     
-    // color for this vertex
-    float dx = abs(x - floor(x / grid_spacing) * grid_spacing);
-    float dz = abs(z - floor(z / grid_spacing) * grid_spacing);
-    dx = min(dx, grid_spacing - dx);
-    dz = min(dz, grid_spacing - dz);
-    bool is_gray = min(dx, dz) < grid_line_width;
-    v.color = is_gray ? GRAY : ORANGE;
+    //
 }
 
 kernel void generateIndices(constant int &resolution [[buffer(0)]],
@@ -138,7 +122,5 @@ kernel void colorVertices(constant float2 *min_max [[buffer(0)]],
     device VertexIn &v = vertices[id.y * resolution + id.x];
     float min_y = min_max[0][0];
     float max_y = min_max[0][1];
-    if (!all(v.color == float4(0.5, 0.5, 0.5, 1.0))) {
-        v.color = brightColor((v.pos.y - min_y) / (max_y - min_y));
-    }
+    v.color = brightColor((v.pos.y - min_y) / (max_y - min_y));
 }

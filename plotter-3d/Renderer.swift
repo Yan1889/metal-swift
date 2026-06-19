@@ -168,24 +168,16 @@ class Renderer: NSObject, MTKViewDelegate {
         let clock = ContinuousClock()
         let start = clock.now
         
-        let resolution: Int = 1000
+        let resolution: Int = 5
         let vertex_count: Int = resolution * resolution
         let quad_count: Int = (resolution - 1) * (resolution - 1)
         
         let grid_spacing: Float = 0.2
         let grid_line_width: Float = 0.005
         
-        struct KernelUniforms {
-            var resolution: Int32
-            let grid_spacing: Float
-            let grid_line_width: Float
-        }
+        // variables to pass to shaders
+        var resolution_int32 = Int32(resolution)
         
-        var uniforms = KernelUniforms(
-            resolution: Int32(resolution),
-            grid_spacing: grid_spacing,
-            grid_line_width: grid_line_width,
-        )
         let max_threads = computePSO_vertices.threadExecutionWidth
         let max_threads_sqrt = Int(Float(max_threads).squareRoot())
         let threads_per_group_1d =    MTLSize(width: max_threads     , height: 1               , depth: 1)
@@ -205,14 +197,14 @@ class Renderer: NSObject, MTKViewDelegate {
         
         // generate the vertices
         encoder.setComputePipelineState(computePSO_vertices)
-        encoder.setBytes(&uniforms, length: MemoryLayout<KernelUniforms>.size, index: 0)
+        encoder.setBytes(&resolution_int32, length: 4, index: 0)
         encoder.setBuffer(vertexBuffer, offset: 0, index: 1)
         encoder.setBuffer(minMaxBufA, offset: 0, index: 2)
         encoder.dispatchThreads(threads_per_grid_vertex, threadsPerThreadgroup: threads_per_group_2d)
         
         // generate the indices
         encoder.setComputePipelineState(computePSO_indices)
-        encoder.setBytes(&uniforms.resolution, length: 4, index: 0)
+        encoder.setBytes(&resolution_int32, length: 4, index: 0)
         encoder.setBuffer(indexBuffer, offset: 0, index: 1)
         encoder.dispatchThreads(threads_per_grid_index, threadsPerThreadgroup: threads_per_group_2d)
 
@@ -242,7 +234,7 @@ class Renderer: NSObject, MTKViewDelegate {
         
         encoder.setComputePipelineState(computePSO_colorVertices)
         encoder.setBuffer(is_A_src ? minMaxBufA : minMaxBufB, offset: 0, index: 0)
-        encoder.setBytes(&uniforms.resolution, length: 4, index: 1)
+        encoder.setBytes(&resolution_int32, length: 4, index: 1)
         encoder.setBuffer(vertexBuffer, offset: 0, index: 2)
         encoder.dispatchThreads(threads_per_grid_vertex, threadsPerThreadgroup: threads_per_group_2d)
 
@@ -256,47 +248,47 @@ class Renderer: NSObject, MTKViewDelegate {
         
         axes = [
             Line3d(
-                start: SIMD3<Float>(-1.5, 0, 0),
-                end: SIMD3<Float>(1.5, 0, 0),
+                start: [-1.5, 0, 0],
+                end: [1.5, 0, 0],
                 thickness: 0.02,
                 device: device,
                 corner_count: 8,
-                color: SIMD4<Float>(1, 0, 0, 1),
+                color: [1, 0, 0, 1],
             ),
             Line3d(
-                start: SIMD3<Float>(0, -1.5, 0),
-                end: SIMD3<Float>(0, 1.5, 0),
+                start: [0, -1.5, 0],
+                end: [0, 1.5, 0],
                 thickness: 0.02,
                 device: device,
                 corner_count: 8,
-                color: SIMD4<Float>(0, 1, 0, 1),
+                color: [0, 1, 0, 1],
             ),
             Line3d(
-                start: SIMD3<Float>(0, 0, -1.5),
-                end: SIMD3<Float>(0, 0, 1.5),
+                start: [0, 0, -1.5],
+                end: [0, 0, 1.5],
                 thickness: 0.02,
                 device: device,
                 corner_count: 8,
-                color: SIMD4<Float>(0, 0, 1, 1),
+                color: [0, 0, 1, 1],
             )
         ]
-
-        let h: Float = 0
-        stride(from: -1.5, through: 1.5, by: 0.2).flatMap { f in
-            [
-                (SIMD3<Float>(f  , h, 1.5), SIMD3<Float>(   f, h, -1.5)),
-                (SIMD3<Float>(1.5, h, f  ), SIMD3<Float>(-1.5, h, f)),
+        
+        for f in stride(from: Float(-1.5), through: 1.5, by: 0.2) {
+            let arr = [
+                (SIMD3<Float>(f  , 0, 1.5), SIMD3<Float>(   f, 0, -1.5)),
+                (SIMD3<Float>(1.5, 0, f  ), SIMD3<Float>(-1.5, 0, f)),
             ]
-        }
-        .forEach { (start, end) in
-            axes.append(Line3d(
-                start: start,
-                end: end,
-                thickness: 0.003,
-                device: device,
-                corner_count: 8,
-                color: SIMD4<Float>(0.5, 0.5, 0.5, 1),
-            ))
+            
+            for (start, end) in arr {
+                axes.append(Line3d(
+                    start: start,
+                    end: end,
+                    thickness: 0.003,
+                    device: device,
+                    corner_count: 8,
+                    color: [0.5, 0.5, 0.5, 1],
+                ))
+            }
         }
     }
     
@@ -375,12 +367,6 @@ class Renderer: NSObject, MTKViewDelegate {
         encoder.endEncoding()
         commandBuffer.present(draw)
         commandBuffer.commit()
-    }
-    
-    func f(_ x: Float, _ y: Float) -> Float {
-        // sin(20 * (x * x + y * y).squareRoot())
-        // sin(15 * x) + sin(15 * y)
-        x * x + y * y
     }
     
     func brightColor(_ t: Float) -> SIMD4<Float> {
