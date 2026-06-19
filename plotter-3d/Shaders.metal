@@ -45,12 +45,17 @@ float function_to_graph(float x, float z) {
     // return sin(15 * x) + sin(15 * z);
 }
 
-kernel void generateMesh(constant int &resolution [[buffer(0)]],
-                         device VertexIn *vertices [[buffer(1)]],
-                         device float2 *min_max [[buffer(2)]],
+kernel void generateMesh(constant int    &resolution [[buffer(0)]],
+                         device VertexIn *vertices   [[buffer(1)]],
+                         device uint     *indices    [[buffer(2)]],
+                         device float2   *min_max    [[buffer(3)]],
                          uint2 id [[thread_position_in_grid]]) {
+    // 'indices' of this vertex
+    int i = id.y;
+    int j = id.x;
+
     // vertex for this thread
-    int idx = id.y * resolution + id.x;
+    int idx = i * resolution + j;
     device VertexIn &v = vertices[idx];
     
     // coordinate for this vertex
@@ -59,20 +64,15 @@ kernel void generateMesh(constant int &resolution [[buffer(0)]],
     float y = function_to_graph(x, z);
     v.pos = float4(x, y, z, 1.0);
     min_max[idx] = float2(y, y);
-    
-    //
-}
 
-kernel void generateIndices(constant int &resolution [[buffer(0)]],
-                            device uint *buf [[buffer(1)]],
-                            uint2 id [[thread_position_in_grid]]) {
-    int i = id.y;
-    int j = id.x;
+    if (i == resolution - 1 || j == resolution - 1) {
+        // skip indices for those edges indices
+        return;
+    }
     
     // each thread is responsible for one quad
     // 1 quad = 2 triangles = 6 indices
     int startIdx = 6 * (i * (resolution - 1) + j);
-    
     int diffs[6][2] = {
         // triangle #1
         {0, 0},
@@ -85,7 +85,7 @@ kernel void generateIndices(constant int &resolution [[buffer(0)]],
     };
     
     for (int k = 0; k < 6; k++) {
-        buf[startIdx + k] = (i + diffs[k][0]) * resolution + (j + diffs[k][1]);
+        indices[startIdx + k] = (i + diffs[k][0]) * resolution + (j + diffs[k][1]);
     }
 }
 

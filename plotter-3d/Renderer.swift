@@ -27,7 +27,6 @@ class Renderer: NSObject, MTKViewDelegate {
     
     // mesh compute pipeline
     private var computePSO_vertices: MTLComputePipelineState!
-    private var computePSO_indices: MTLComputePipelineState!
     private var computePSO_reduceArray: MTLComputePipelineState!
     private var computePSO_colorVertices: MTLComputePipelineState!
     
@@ -159,7 +158,6 @@ class Renderer: NSObject, MTKViewDelegate {
     
     func setupComputePipeline() {
         computePSO_vertices = try! device.makeComputePipelineState(function: lib.makeFunction(name: "generateMesh")!)
-        computePSO_indices = try! device.makeComputePipelineState(function: lib.makeFunction(name: "generateIndices")!)
         computePSO_reduceArray = try! device.makeComputePipelineState(function: lib.makeFunction(name: "reduceArray")!)
         computePSO_colorVertices = try! device.makeComputePipelineState(function: lib.makeFunction(name: "colorVertices")!)
     }
@@ -199,15 +197,10 @@ class Renderer: NSObject, MTKViewDelegate {
         encoder.setComputePipelineState(computePSO_vertices)
         encoder.setBytes(&resolution_int32, length: 4, index: 0)
         encoder.setBuffer(vertexBuffer, offset: 0, index: 1)
-        encoder.setBuffer(minMaxBufA, offset: 0, index: 2)
+        encoder.setBuffer(indexBuffer, offset: 0, index: 2)
+        encoder.setBuffer(minMaxBufA, offset: 0, index: 3)
         encoder.dispatchThreads(threads_per_grid_vertex, threadsPerThreadgroup: threads_per_group_2d)
         
-        // generate the indices
-        encoder.setComputePipelineState(computePSO_indices)
-        encoder.setBytes(&resolution_int32, length: 4, index: 0)
-        encoder.setBuffer(indexBuffer, offset: 0, index: 1)
-        encoder.dispatchThreads(threads_per_grid_index, threadsPerThreadgroup: threads_per_group_2d)
-
         // get the min and max values for y in the vertex array
         // reduce the min/max array until only one entry is left
         var min_max_entries = Int32(vertex_count)
