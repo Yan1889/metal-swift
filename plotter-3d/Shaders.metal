@@ -40,8 +40,8 @@ float4 brightColor(float t);
 #define ORANGE float4(1.0, 0.6, 0.0, 1.0)
 
 float function_to_graph(float x, float z) {
-    return x * x + z * z;
-    // return sin(20 * (x * x + z * z));
+    return x * x - z * z;
+    // return sin(10 * (x * x + z * z));
     // return sin(15 * x) + sin(15 * z);
 }
 
@@ -90,58 +90,91 @@ kernel void generateMesh(constant int    &resolution [[buffer(0)]],
     }
 }
 
-kernel void generateGrid(constant int      &line_count   [[buffer(0)]],
-                         constant float    &line_width   [[buffer(1)]],
-                         device   VertexIn *vertices     [[buffer(2)]],
-                         device   uint     *indices      [[buffer(3)]],
-                         uint2 id [[thread_position_in_grid]]) {
-    int i = id.y;
-    int j = id.x;
+kernel void generateGrid(constant int      &line_count     [[buffer(0)]],
+                         constant int      &segment_count  [[buffer(1)]],
+                         constant float    &line_width     [[buffer(2)]],
+                         device   VertexIn *vertices       [[buffer(3)]],
+                         device   uint     *indices        [[buffer(4)]],
+                         uint3 id [[thread_position_in_grid]]) {
     
-    // 4 vertices for every thread (`vs[0...3]`)
-    device VertexIn *vs = vertices + 4 * (i * line_count + j);
+    int line = id.x;
+    int segment = id.y;
+    bool along_x = id.z == 0;
     
-    float x = 2.0 * id.x / (line_count - 1.0) - 1.0;
-    float z = 2.0 * id.y / (line_count - 1.0) - 1.0;
+    float x1, x2, y1, y2, z1, z2;
     
-    float y = function_to_graph(x, z) + 0.01;
-    vs[0].pos = float4(x - line_width, y, z - line_width, 1);
-    vs[1].pos = float4(x + line_width, y, z - line_width, 1);
-    vs[2].pos = float4(x + line_width, y, z + line_width, 1);
-    vs[3].pos = float4(x - line_width, y, z + line_width, 1);
+    if (along_x) {
+        float x = 2.0 * float(segment) / float(segment_count - 1) - 1.0;
+        float z = 2.0 * float(line)    / float(line_count - 1)    - 1.0;
+        
+        x1 = x;
+        x2 = x;
+        
+        z1 = z - line_width;
+        z2 = z + line_width;
+    } else {
+        float z = 2.0 * float(segment) / float(segment_count - 1) - 1.0;
+        float x = 2.0 * float(line)    / float(line_count - 1)    - 1.0;
+        
+        // lines go along the z axis
+        x1 = x - line_width;
+        x2 = x + line_width;
+        
+        z1 = z;
+        z2 = z;
+    }
     
-    vs[0].color = float4(0, 0, 0, 1);
-    vs[1].color = float4(0, 0, 0, 1);
-    vs[2].color = float4(0, 0, 0, 1);
-    vs[3].color = float4(0, 0, 0, 1);
+    y1 = function_to_graph(x1, z1) + 0.01;
+    y2 = y1; // function_to_graph(x2, z2) + 0.01;
     
-    // indices
-    if (i == line_count - 1 || j == line_count - 1) {
+    auto wrap = [segment_count](int l, int s) {
+        return l * segment_count + s;
+    };
+    
+    // 2 vertices for each thread
+    device VertexIn *vs = vertices + 4 * wrap(line, segment);
+    
+    if (along_x) {
+        // `vs[0]` and `vs[1]`
+        vs[0].pos = float4(x1, y1, z1, 1);
+        vs[1].pos = float4(x2, y2, z2, 1);
+    } else {
+        // `vs[2]` and `vs[3]`
+        vs[2].pos = float4(x1, y1, z1, 1);
+        vs[3].pos = float4(x2, y2, z2, 1);
+    }
+    
+    if (segment == segment_count - 1) {
         return;
     }
     
-    device uint *startIndex = indices + 12 * (i * line_count + j);
+    // 1 quad for every thread
+    device uint *is = indices + 2 * 6 * wrap(line, segment);
     
-    int start0 = 4 * ((i + 0) * line_count + j + 0);
-    int startR = 4 * ((i + 0) * line_count + j + 1);
-    int startU = 4 * ((i + 1) * line_count + j + 0);
-    
-    // quad #1, triangle #1
-    startIndex[0] = start0 + 0;
-    startIndex[1] = startR + 0;
-    startIndex[2] = startR + 3;
-    // quad #1, triangle #2
-    startIndex[3] = start0 + 0;
-    startIndex[4] = start0 + 3;
-    startIndex[5] = startR + 3;
-    // quad #2, triangle #1
-    startIndex[6] = start0 + 2;
-    startIndex[7] = startU + 1;
-    startIndex[8] = startU + 0;
-    // quad #2, triangle #2
-    startIndex[9]  = start0 + 2;
-    startIndex[10] = start0 + 3;
-    startIndex[11] = startU + 0;
+    if (along_x) {
+        // use first 6
+        // use only the first 2 vertices
+        
+        // triangle #1
+        is[0] = 4 * wrap(line, segment + 0) + 0;
+        is[1] = 4 * wrap(line, segment + 0) + 1;
+        is[2] = 4 * wrap(line, segment + 1) + 1;
+        // triangle #2
+        is[3] = 4 * wrap(line, segment + 0) + 0;
+        is[4] = 4 * wrap(line, segment + 1) + 0;
+        is[5] = 4 * wrap(line, segment + 1) + 1;
+    } else {
+        // use last 6
+        // use only the last 2 vertices
+        // triangle #1
+        is[6] = 4 * wrap(line, segment + 0) + 2;
+        is[7] = 4 * wrap(line, segment + 0) + 3;
+        is[8] = 4 * wrap(line, segment + 1) + 3;
+        // triangle #2
+        is[9]  = 4 * wrap(line, segment + 0) + 2;
+        is[10] = 4 * wrap(line, segment + 1) + 2;
+        is[11] = 4 * wrap(line, segment + 1) + 3;
+    }
 }
 
 float4 brightColor(float t) {

@@ -170,24 +170,30 @@ class Renderer: NSObject, MTKViewDelegate {
         let clock = ContinuousClock()
         let start = clock.now
         
-        let resolution:      Int = 300
-        var grid_line_count: Int = 10
-        let vertex_count_graph: Int = resolution            * resolution
-        let vertex_count_grid:  Int = grid_line_count       * grid_line_count * 4
-        let quad_count_graph:   Int = (resolution - 1)      * (resolution - 1)
-        let quad_count_grid:    Int = grid_line_count       * grid_line_count
+        // graph mesh
+        let resolution_graph: Int = 300
+        let vertex_count_graph: Int = resolution_graph * resolution_graph
+        let quad_count_graph: Int = (resolution_graph - 1) * (resolution_graph - 1)
+        
+        // grid mesh
+        let grid_line_count: Int = 10
+        let grid_segment_count: Int = 1000
+        let vertex_count_grid:  Int = 2 * grid_line_count * (grid_segment_count - 1) * 2
+        let quad_count_grid: Int = 2 * grid_line_count * grid_segment_count
         
         
         // variables to pass to shaders
-        var resolution_int32 = Int32(resolution)
+        var resolution_graph_int32 = Int32(resolution_graph)
+        var grid_line_count_int32 = Int32(grid_line_count)
+        var grid_segment_count_int32 = Int32(grid_segment_count)
         var grid_line_width: Float = 0.003
         
         let max_threads = computePSO_vertices.threadExecutionWidth
         let max_threads_sqrt = Int(Float(max_threads).squareRoot())
-        let threads_per_group_1d   = MTLSize(width: max_threads     , height: 1               , depth: 1)
-        let threads_per_group_2d   = MTLSize(width: max_threads_sqrt, height: max_threads_sqrt, depth: 1)
-        let threads_per_grid_graph = MTLSize(width: resolution      , height: resolution      , depth: 1)
-        let threads_per_grid_grid  = MTLSize(width: grid_line_count , height: grid_line_count , depth: 1)
+        let threads_per_group_1d   = MTLSize(width: max_threads     , height: 1                 , depth: 1)
+        let threads_per_group_2d   = MTLSize(width: max_threads_sqrt, height: max_threads_sqrt  , depth: 1)
+        let threads_per_grid_graph = MTLSize(width: resolution_graph, height: resolution_graph  , depth: 1)
+        let threads_per_grid_grid  = MTLSize(width: grid_line_count , height: grid_segment_count, depth: 2)
         
         let minMaxBufA = device.makeBuffer(length: 2 * 4 * vertex_count_graph)!
         let minMaxBufB = device.makeBuffer(length: 2 * 4 * vertex_count_graph)!
@@ -203,7 +209,7 @@ class Renderer: NSObject, MTKViewDelegate {
         
         // generate the vertices
         encoder.setComputePipelineState(computePSO_vertices)
-        encoder.setBytes(&resolution_int32, length: 4, index: 0)
+        encoder.setBytes(&resolution_graph_int32, length: 4, index: 0)
         encoder.setBuffer(vertexBuffer_graph, offset: 0, index: 1)
         encoder.setBuffer(indexBuffer_graph, offset: 0, index: 2)
         encoder.setBuffer(minMaxBufA, offset: 0, index: 3)
@@ -211,10 +217,11 @@ class Renderer: NSObject, MTKViewDelegate {
         
         // generate the grid
         encoder.setComputePipelineState(computePSO_grid)
-        encoder.setBytes(&grid_line_count,  length: 4, index: 0)
-        encoder.setBytes(&grid_line_width,  length: 4, index: 1)
-        encoder.setBuffer(vertexBuffer_grid, offset: 0, index: 2)
-        encoder.setBuffer(indexBuffer_grid,  offset: 0, index: 3)
+        encoder.setBytes(&grid_line_count_int32,    length: 4, index: 0)
+        encoder.setBytes(&grid_segment_count_int32, length: 4, index: 1)
+        encoder.setBytes(&grid_line_width,  length: 4, index: 2)
+        encoder.setBuffer(vertexBuffer_grid, offset: 0, index: 3)
+        encoder.setBuffer(indexBuffer_grid,  offset: 0, index: 4)
         encoder.dispatchThreads(threads_per_grid_grid, threadsPerThreadgroup: threads_per_group_2d)
 
         // get the min and max values for y in the vertex array
@@ -243,7 +250,7 @@ class Renderer: NSObject, MTKViewDelegate {
         
         encoder.setComputePipelineState(computePSO_colorVertices)
         encoder.setBuffer(is_A_src ? minMaxBufA : minMaxBufB, offset: 0, index: 0)
-        encoder.setBytes(&resolution_int32, length: 4, index: 1)
+        encoder.setBytes(&resolution_graph_int32, length: 4, index: 1)
         encoder.setBuffer(vertexBuffer_graph, offset: 0, index: 2)
         encoder.dispatchThreads(threads_per_grid_graph, threadsPerThreadgroup: threads_per_group_2d)
 
