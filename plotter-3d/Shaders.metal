@@ -100,32 +100,33 @@ kernel void generateGrid(constant int      &line_count     [[buffer(0)]],
     int line = id.x;
     int segment = id.y;
     bool along_x = id.z == 0;
-    
-    float x1, x2, y1, y2, z1, z2;
+    float x, z;
     
     if (along_x) {
-        float x = 2.0 * float(segment) / float(segment_count - 1) - 1.0;
-        float z = 2.0 * float(line)    / float(line_count - 1)    - 1.0;
-        
+        x = 2.0 * float(segment) / float(segment_count - 1) - 1.0;
+        z = 2.0 * float(line)    / float(line_count - 1)    - 1.0;
+    } else {
+        z = 2.0 * float(segment) / float(segment_count - 1) - 1.0;
+        x = 2.0 * float(line)    / float(line_count - 1)    - 1.0;
+    }
+    
+    float x1, x2, z1, z2;
+    
+    if (along_x) {
         x1 = x;
         x2 = x;
         
         z1 = z - line_width;
         z2 = z + line_width;
     } else {
-        float z = 2.0 * float(segment) / float(segment_count - 1) - 1.0;
-        float x = 2.0 * float(line)    / float(line_count - 1)    - 1.0;
-        
-        // lines go along the z axis
         x1 = x - line_width;
         x2 = x + line_width;
         
         z1 = z;
         z2 = z;
     }
-    
-    y1 = function_to_graph(x1, z1) + 0.01;
-    y2 = y1; // function_to_graph(x2, z2) + 0.01;
+    float y1 = function_to_graph(x1, z1) + 0.01;
+    float y2 = function_to_graph(x2, z2) + 0.01;
     
     auto wrap = [segment_count](int l, int s) {
         return l * segment_count + s;
