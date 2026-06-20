@@ -24,6 +24,8 @@ class Renderer: NSObject, MTKViewDelegate {
     private var indexBuffer_graph: MTLBuffer!
     private var vertexBuffer_grid: MTLBuffer!
     private var indexBuffer_grid: MTLBuffer!
+    private var vertexBuffer_x_z_plane: MTLBuffer!
+    private var indexBuffer_x_z_plane: MTLBuffer!
     private var depthTexture: MTLTexture!
     private var depthState: MTLDepthStencilState!
     
@@ -156,6 +158,18 @@ class Renderer: NSObject, MTKViewDelegate {
         pipelineDescriptor.vertexFunction = lib.makeFunction(name: "vertexShader")!
         pipelineDescriptor.fragmentFunction = lib.makeFunction(name: "fragmentShader")!
         
+        let attachment = pipelineDescriptor.colorAttachments[0]!
+        attachment.isBlendingEnabled = true
+
+        attachment.rgbBlendOperation = .add
+        attachment.alphaBlendOperation = .add
+
+        attachment.sourceRGBBlendFactor = .sourceAlpha
+        attachment.destinationRGBBlendFactor = .oneMinusSourceAlpha
+
+        attachment.sourceAlphaBlendFactor = .one
+        attachment.destinationAlphaBlendFactor = .oneMinusSourceAlpha
+        
         renderPSO = try! device.makeRenderPipelineState(descriptor: pipelineDescriptor)
     }
     
@@ -167,17 +181,27 @@ class Renderer: NSObject, MTKViewDelegate {
     }
     
     func setupBuffers() {
+        // 'cpu'
+        setupAxes()
+        setup_x_z_plane_grid()
+        
+        // 'gpu'
+        setupBuffer_x_z_plane()
+        setupBuffers_Graph()
+    }
+    
+    func setupBuffers_Graph() {
         let clock = ContinuousClock()
         let start = clock.now
         
         // graph mesh
-        let resolution_graph: Int = 300
+        let resolution_graph: Int = 100
         let vertex_count_graph: Int = resolution_graph * resolution_graph
         let quad_count_graph: Int = (resolution_graph - 1) * (resolution_graph - 1)
         
         // grid mesh
         let grid_line_count: Int = 10
-        let grid_segment_count: Int = 1000
+        let grid_segment_count: Int = 50
         let vertex_count_grid:  Int = 2 * grid_line_count * (grid_segment_count - 1) * 2
         let quad_count_grid: Int = 2 * grid_line_count * grid_segment_count
         
@@ -199,10 +223,10 @@ class Renderer: NSObject, MTKViewDelegate {
         let minMaxBufB = device.makeBuffer(length: 2 * 4 * vertex_count_graph)!
         var is_A_src = true
         
-        vertexBuffer_graph = device.makeBuffer(length: vertex_count_graph * MemoryLayout<Vertex>.stride)
-        vertexBuffer_grid  = device.makeBuffer(length: vertex_count_grid  * MemoryLayout<Vertex>.stride)
-        indexBuffer_graph  = device.makeBuffer(length: quad_count_graph * 6 * 4)
-        indexBuffer_grid   = device.makeBuffer(length: quad_count_grid  * 2 * 6 * 4)
+        vertexBuffer_graph     = device.makeBuffer(length: vertex_count_graph * MemoryLayout<Vertex>.stride)
+        vertexBuffer_grid      = device.makeBuffer(length: vertex_count_grid  * MemoryLayout<Vertex>.stride)
+        indexBuffer_graph      = device.makeBuffer(length: quad_count_graph * 6 * 4)
+        indexBuffer_grid       = device.makeBuffer(length: quad_count_grid  * 2 * 6 * 4)
         
         let commandBuffer = commandQueue.makeCommandBuffer()!
         let encoder = commandBuffer.makeComputeCommandEncoder()!
@@ -261,7 +285,37 @@ class Renderer: NSObject, MTKViewDelegate {
         print("buffer generation ~ \(clock.now - start)")
         print("sizeof(vertex buffer) ~ \(vertexBuffer_graph.length / 1_000_000)MB")
         print("sizeof(index buffer) ~ \(indexBuffer_graph.length / 1_000_000)MB")
+    }
+    
+    func setupBuffer_x_z_plane() {
+        let color = SIMD4<Float>(0.7, 0.7, 0.7, 0.8);
         
+        let vertices: [Vertex] = [
+            Vertex(pos: [-1.5, 0, -1.5, 1], col: color),
+            Vertex(pos: [-1.5, 0,  1.5, 1], col: color),
+            Vertex(pos: [ 1.5, 0,  1.5, 1], col: color),
+            Vertex(pos: [ 1.5, 0, -1.5, 1], col: color),
+        ]
+        
+        let indices: [UInt32] = [
+            0, 2, 1, // triangle #1
+            0, 3, 2, // triangle #2
+        ]
+        
+        vertexBuffer_x_z_plane = device.makeBuffer(
+            bytes: vertices,
+            length: 4 * MemoryLayout<Vertex>.stride,
+            options: .storageModeShared,
+        )
+        
+        indexBuffer_x_z_plane = device.makeBuffer(
+            bytes: indices,
+            length: 6 * 4,
+            options: .storageModeShared,
+        )
+    }
+    
+    func setupAxes() {
         axes = [
             Line3d(
                 start: [-1.5, 0, 0],
@@ -288,8 +342,12 @@ class Renderer: NSObject, MTKViewDelegate {
                 color: [0, 0, 1, 1],
             )
         ]
+    }
+    
+    func setup_x_z_plane_grid() {
+        let line_count = 10
         
-        for f in stride(from: Float(-1.5), through: 1.5, by: 0.2) {
+        for f in stride(from: Float(-1.5), through: 1.5, by: 3.0 / Float(line_count)) {
             let arr = [
                 (SIMD3<Float>(f  , 0, 1.5), SIMD3<Float>(   f, 0, -1.5)),
                 (SIMD3<Float>(1.5, 0, f  ), SIMD3<Float>(-1.5, 0, f)),
@@ -364,12 +422,15 @@ class Renderer: NSObject, MTKViewDelegate {
         encoder.setRenderPipelineState(renderPSO)
         encoder.setDepthStencilState(depthState)
         
-        encoder.setVertexBuffer(vertexBuffer_graph, offset: 0, index: 0)
+
+        // bind mvp-matrix to slot 1 once only
         encoder.setVertexBytes(
             &uniforms_vertex,
             length: MemoryLayout<VertexUniforms>.stride,
             index: 1
         )
+            
+        encoder.setVertexBuffer(vertexBuffer_graph, offset: 0, index: 0)
         encoder.drawIndexedPrimitives(
             type: .triangle,
             indexCount: indexBuffer_graph.length / 4,
@@ -384,28 +445,28 @@ class Renderer: NSObject, MTKViewDelegate {
             indexCount: indexBuffer_grid.length / 4,
             indexType: .uint32,
             indexBuffer: indexBuffer_grid,
-            indexBufferOffset: 0
+            indexBufferOffset: 0,
         )
         
         axes.forEach { $0.draw(encoder) }
         
+        encoder.setVertexBuffer(vertexBuffer_x_z_plane, offset: 0, index: 0)
+        encoder.setVertexBytes(
+            &uniforms_vertex,
+            length: MemoryLayout<VertexUniforms>.stride,
+            index: 1
+        )
+        encoder.drawIndexedPrimitives(
+            type: .triangle,
+            indexCount: 6,
+            indexType: .uint32,
+            indexBuffer: indexBuffer_x_z_plane,
+            indexBufferOffset: 0,
+        )
+        
         encoder.endEncoding()
         commandBuffer.present(draw)
         commandBuffer.commit()
-    }
-    
-    func brightColor(_ t: Float) -> SIMD4<Float> {
-        // return SIMD4<Float>(0.8, 0.5, 0.0, 1)
-        
-        // Clamp just in case
-        let x = max(0, min(1, t))
-        
-        // Frequency-shifted phase offsets for R, G, B
-        let r = 0.5 + 0.5 * cos(2.0 * .pi * (x + 0.0/3.0))
-        let g = 0.5 + 0.5 * cos(2.0 * .pi * (x + 1.0/3.0))
-        let b = 0.5 + 0.5 * cos(2.0 * .pi * (x + 2.0/3.0))
-        
-        return SIMD4<Float>(r, g, b, 1.0)
     }
     
     func make_translation_matrix(_ x: Float, _ y: Float, _ z: Float) -> matrix_float4x4 {

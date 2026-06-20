@@ -139,10 +139,14 @@ kernel void generateGrid(constant int      &line_count     [[buffer(0)]],
         // `vs[0]` and `vs[1]`
         vs[0].pos = float4(x1, y1, z1, 1);
         vs[1].pos = float4(x2, y2, z2, 1);
+        vs[0].color = float4(0, 0, 0, 1);
+        vs[1].color = float4(0, 0, 0, 1);
     } else {
         // `vs[2]` and `vs[3]`
         vs[2].pos = float4(x1, y1, z1, 1);
         vs[3].pos = float4(x2, y2, z2, 1);
+        vs[2].color = float4(0, 0, 0, 1);
+        vs[3].color = float4(0, 0, 0, 1);
     }
     
     if (segment == segment_count - 1) {
