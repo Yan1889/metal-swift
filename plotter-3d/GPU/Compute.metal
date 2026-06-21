@@ -21,12 +21,19 @@ kernel void reduceArray(constant int &entries [[buffer(0)]],
     }
 }
 
-kernel void colorVertices(constant float2 *min_max [[buffer(0)]],
-                          constant int &resolution [[buffer(1)]],
-                          device VertexIn *vertices [[buffer(2)]],
-                          uint2 id [[thread_position_in_grid]]) {
+kernel void colorVertices(constant float2 *min_max  [[buffer(0)]],
+                          constant int &resolution  [[buffer(1)]],
+                          constant uchar &smooth    [[buffer(2)]],
+                          device VertexIn *vertices [[buffer(3)]],
+                           uint2 id [[thread_position_in_grid]]) {
+    
     device VertexIn &v = vertices[id.y * resolution + id.x];
     float min_y = min_max[0][0];
     float max_y = min_max[0][1];
-    v.color = brightColor((v.pos.y - min_y) / (max_y - min_y));
+    float t = (v.pos.y - min_y) / (max_y - min_y);
+    if (!smooth) {
+        // round to 1 decimal place
+        t = round(10.0 * t) / 10.0;
+    }
+    v.color = brightColor(t);
 }

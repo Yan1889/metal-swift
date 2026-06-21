@@ -20,7 +20,8 @@ class Renderer: NSObject, MTKViewDelegate {
     
     // render pipeline
     private var renderPSO: MTLRenderPipelineState!
-    private var vertexBuffer_graph: MTLBuffer!
+    private var vertexBuffer_graphContinuous: MTLBuffer!
+    private var vertexBuffer_graphDiscrete: MTLBuffer!
     private var indexBuffer_graph: MTLBuffer!
     private var vertexBuffer_grid: MTLBuffer!
     private var indexBuffer_grid: MTLBuffer!
@@ -36,12 +37,44 @@ class Renderer: NSObject, MTKViewDelegate {
     private var computePSO_grid: MTLComputePipelineState!
     
     private var axes: [Line3d] = []
-    private var fun_str: String = ""
     
-    private var zoom: Float = 1
+    // variables the user controls (push)
+    private var fun_str: String
+    private var resolution_graph: Int
+    private var resolution_grid_lines: Int
+    private var resolution_grid_segments: Int
     
-    init(view: MetalMtkView) {
+    // variables the user controls (pull)
+    public var smoothGradient: Bool
+    public var cam_dist: Float
+    public var cam_pitch: Float
+    public var cam_yaw: Float
+    
+    init(
+        view: MetalMtkView,
+        // 'push'
+        fun_str: String,
+        resolution_graph: Int,
+        resolution_grid_lines: Int,
+        resolution_grid_segments: Int,
+        // 'pull'
+        smoothGradient: Bool,
+        cam_dist: Float,
+        cam_pitch: Float,
+        cam_yaw: Float,
+    ) {
         self.view = view
+        // 'push'
+        self.fun_str = fun_str
+        self.resolution_graph = resolution_graph
+        self.resolution_grid_lines = resolution_grid_lines
+        self.resolution_grid_segments = resolution_grid_segments
+        // 'pull'
+        self.smoothGradient = smoothGradient
+        self.cam_dist = cam_dist
+        self.cam_pitch = cam_pitch
+        self.cam_yaw = cam_yaw
+        
         device = MTLCreateSystemDefaultDevice()!
         lib = device.makeDefaultLibrary()!
         commandQueue = device.makeCommandQueue()!
@@ -183,15 +216,17 @@ class Renderer: NSObject, MTKViewDelegate {
         setupAxes()
         setup_x_z_plane_grid()
         setupBuffer_x_z_plane()
+        updateMeshPipeline(nil)
     }
     
-    func updateMeshPipeline(_ fun_str: String) {
-        if self.fun_str == fun_str {
-            // there was no change
-            return
+    /// the pipeline only gets compiled newly if the argument is `nil` or different from `self.fun_str`
+    func updateMeshPipeline(_ f: String?) {
+        if let unwrapped = f {
+            if unwrapped == fun_str {
+                return
+            }
+            fun_str = unwrapped
         }
-        
-        self.fun_str = fun_str
         
         let sourceURL: URL = Bundle.main.url(
             forResource: "MeshGenerationTemplate",
@@ -215,44 +250,56 @@ class Renderer: NSObject, MTKViewDelegate {
         setupBuffers_Graph()
     }
     
+    func setResolutions(resolution_graph: Int, resolution_grid_lines: Int, resolution_grid_segments: Int) {
+        if self.resolution_graph == resolution_graph &&
+            self.resolution_grid_lines == resolution_grid_lines &&
+            self.resolution_grid_segments == resolution_grid_segments
+        {
+            return // there was no change
+        }
+        self.resolution_graph = resolution_graph
+        self.resolution_grid_lines = resolution_grid_lines
+        self.resolution_grid_segments = resolution_grid_segments
+        
+        setupBuffers_Graph()
+    }
+    
     func setupBuffers_Graph() {
         let clock = ContinuousClock()
         let start = clock.now
         
-        
         // graph mesh
-        let resolution_graph: Int = 100
         let vertex_count_graph: Int = resolution_graph * resolution_graph
         let quad_count_graph: Int = (resolution_graph - 1) * (resolution_graph - 1)
         
         // grid mesh
-        let grid_line_count: Int = 10
-        let grid_segment_count: Int = 50
-        let vertex_count_grid:  Int = 2 * grid_line_count * (grid_segment_count - 1) * 2
-        let quad_count_grid: Int = 2 * grid_line_count * grid_segment_count
-        
+        let vertex_count_grid: Int = 2 * resolution_grid_lines * (resolution_grid_segments - 1) * 2
+        let quad_count_grid: Int = 2 * resolution_grid_lines * resolution_grid_segments
         
         // variables to pass to shaders
         var resolution_graph_int32 = Int32(resolution_graph)
-        var grid_line_count_int32 = Int32(grid_line_count)
-        var grid_segment_count_int32 = Int32(grid_segment_count)
+        var grid_line_count_int32 = Int32(resolution_grid_lines)
+        var grid_segment_count_int32 = Int32(resolution_grid_segments)
         var grid_line_width: Float = 0.003
         
+        // threads per group and threads per grid
         let max_threads = computePSO_vertices.threadExecutionWidth
         let max_threads_sqrt = Int(Float(max_threads).squareRoot())
-        let threads_per_group_1d   = MTLSize(width: max_threads     , height: 1                 , depth: 1)
-        let threads_per_group_2d   = MTLSize(width: max_threads_sqrt, height: max_threads_sqrt  , depth: 1)
-        let threads_per_grid_graph = MTLSize(width: resolution_graph, height: resolution_graph  , depth: 1)
-        let threads_per_grid_grid  = MTLSize(width: grid_line_count , height: grid_segment_count, depth: 2)
+        let threads_per_group_1d   = MTLSize(width: max_threads           , height: 1                       , depth: 1)
+        let threads_per_group_2d   = MTLSize(width: max_threads_sqrt      , height: max_threads_sqrt        , depth: 1)
+        let threads_per_grid_graph = MTLSize(width: resolution_graph      , height: resolution_graph        , depth: 1)
+        let threads_per_grid_grid  = MTLSize(width: resolution_grid_lines , height: resolution_grid_segments, depth: 2)
         
         let minMaxBufA = device.makeBuffer(length: 2 * 4 * vertex_count_graph)!
         let minMaxBufB = device.makeBuffer(length: 2 * 4 * vertex_count_graph)!
         var is_A_src = true
         
-        vertexBuffer_graph     = device.makeBuffer(length: vertex_count_graph * MemoryLayout<Vertex>.stride)
-        vertexBuffer_grid      = device.makeBuffer(length: vertex_count_grid  * MemoryLayout<Vertex>.stride)
-        indexBuffer_graph      = device.makeBuffer(length: quad_count_graph * 6 * 4)
-        indexBuffer_grid       = device.makeBuffer(length: quad_count_grid  * 2 * 6 * 4)
+        vertexBuffer_graphContinuous = device.makeBuffer(length: vertex_count_graph * MemoryLayout<Vertex>.stride)
+        vertexBuffer_graphDiscrete   = device.makeBuffer(length: vertex_count_graph * MemoryLayout<Vertex>.stride)
+        vertexBuffer_grid            = device.makeBuffer(length: vertex_count_grid  * MemoryLayout<Vertex>.stride)
+        
+        indexBuffer_graph = device.makeBuffer(length: quad_count_graph * 6 * 4)
+        indexBuffer_grid  = device.makeBuffer(length: quad_count_grid  * 2 * 6 * 4)
         
         let commandBuffer = commandQueue.makeCommandBuffer()!
         let encoder = commandBuffer.makeComputeCommandEncoder()!
@@ -260,9 +307,12 @@ class Renderer: NSObject, MTKViewDelegate {
         // generate the vertices
         encoder.setComputePipelineState(computePSO_vertices)
         encoder.setBytes(&resolution_graph_int32, length: 4, index: 0)
-        encoder.setBuffer(vertexBuffer_graph, offset: 0, index: 1)
+        encoder.setBuffer(vertexBuffer_graphContinuous, offset: 0, index: 1)
         encoder.setBuffer(indexBuffer_graph, offset: 0, index: 2)
         encoder.setBuffer(minMaxBufA, offset: 0, index: 3)
+        encoder.dispatchThreads(threads_per_grid_graph, threadsPerThreadgroup: threads_per_group_2d)
+        // discrete
+        encoder.setBuffer(vertexBuffer_graphDiscrete, offset: 0, index: 1)
         encoder.dispatchThreads(threads_per_grid_graph, threadsPerThreadgroup: threads_per_group_2d)
         
         // generate the grid
@@ -298,10 +348,20 @@ class Renderer: NSObject, MTKViewDelegate {
             is_A_src.toggle()
         }
         
+        // :(
+        var int8_true: UInt8 = 1
+        var int8_false: UInt8 = 0
+        
+        // color continuous
         encoder.setComputePipelineState(computePSO_colorVertices)
         encoder.setBuffer(is_A_src ? minMaxBufA : minMaxBufB, offset: 0, index: 0)
         encoder.setBytes(&resolution_graph_int32, length: 4, index: 1)
-        encoder.setBuffer(vertexBuffer_graph, offset: 0, index: 2)
+        encoder.setBytes(&int8_true, length: 1, index: 2)
+        encoder.setBuffer(vertexBuffer_graphContinuous, offset: 0, index: 3)
+        encoder.dispatchThreads(threads_per_grid_graph, threadsPerThreadgroup: threads_per_group_2d)
+        // color discrete
+        encoder.setBytes(&int8_false, length: 1, index: 2)
+        encoder.setBuffer(vertexBuffer_graphDiscrete, offset: 0, index: 3)
         encoder.dispatchThreads(threads_per_grid_graph, threadsPerThreadgroup: threads_per_group_2d)
 
         encoder.endEncoding()
@@ -309,8 +369,6 @@ class Renderer: NSObject, MTKViewDelegate {
         commandBuffer.waitUntilCompleted()
         
         print("buffer generation ~ \(clock.now - start)")
-        print("sizeof(vertex buffer) ~ \(vertexBuffer_graph.length / 1_000_000)MB")
-        print("sizeof(index buffer) ~ \(indexBuffer_graph.length / 1_000_000)MB")
     }
     
     func setupBuffer_x_z_plane() {
@@ -392,18 +450,6 @@ class Renderer: NSObject, MTKViewDelegate {
         }
     }
     
-    struct VertexUniforms {
-        let mvp_matrix: simd_float4x4
-    }
-    
-    var time_acc: Float = 0
-    
-    // roll will not change and stay 0
-    var cam_pitch: Float = 0
-    var cam_yaw: Float = 0
-    var cam_dist: Float = 5
-    
-    
     func draw(in view: MTKView) {
         guard let pass = view.currentRenderPassDescriptor,
               let draw = view.currentDrawable
@@ -416,8 +462,6 @@ class Renderer: NSObject, MTKViewDelegate {
         pass.depthAttachment.loadAction = .clear
         pass.depthAttachment.storeAction = .dontCare
         pass.depthAttachment.clearDepth = 1.0
-        
-        time_acc += 0.016
         
         pass.colorAttachments[0].loadAction = .clear
         pass.colorAttachments[0].storeAction = .store
@@ -441,7 +485,7 @@ class Renderer: NSObject, MTKViewDelegate {
             near: 0.1,
             far: 100,
         )
-        var uniforms_vertex = VertexUniforms(mvp_matrix: projection * view * model)
+        var mvp = projection * view * model
         
         let commandBuffer = commandQueue.makeCommandBuffer()!
         let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: pass)!
@@ -451,12 +495,16 @@ class Renderer: NSObject, MTKViewDelegate {
 
         // bind mvp-matrix to slot 1 once only
         encoder.setVertexBytes(
-            &uniforms_vertex,
-            length: MemoryLayout<VertexUniforms>.stride,
+            &mvp,
+            length: MemoryLayout<matrix_float4x4>.stride,
             index: 1
         )
             
-        encoder.setVertexBuffer(vertexBuffer_graph, offset: 0, index: 0)
+        encoder.setVertexBuffer(
+            smoothGradient ? vertexBuffer_graphContinuous : vertexBuffer_graphDiscrete,
+            offset: 0,
+            index: 0,
+        )
         encoder.drawIndexedPrimitives(
             type: .triangle,
             indexCount: indexBuffer_graph.length / 4,
@@ -477,11 +525,6 @@ class Renderer: NSObject, MTKViewDelegate {
         axes.forEach { $0.draw(encoder) }
         
         encoder.setVertexBuffer(vertexBuffer_x_z_plane, offset: 0, index: 0)
-        encoder.setVertexBytes(
-            &uniforms_vertex,
-            length: MemoryLayout<VertexUniforms>.stride,
-            index: 1
-        )
         encoder.drawIndexedPrimitives(
             type: .triangle,
             indexCount: 6,

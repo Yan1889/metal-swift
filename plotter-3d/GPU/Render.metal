@@ -12,14 +12,10 @@ struct VertexOut {
     float4 color;
 };
 
-struct VertexUniforms {
-    float4x4 mvp_matrix;
-};
-
 vertex VertexOut vertexShader(VertexIn in [[stage_in]],
-                              constant VertexUniforms &uniforms [[buffer(1)]]) {
+                              constant float4x4 &mvp [[buffer(1)]]) {
     VertexOut out;
-    out.pos = uniforms.mvp_matrix * in.pos;
+    out.pos = mvp * in.pos;
     out.color = in.color;
     return out;
 }
