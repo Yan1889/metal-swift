@@ -14,12 +14,14 @@ struct ContentView: View {
     @State var cam_pitch: Float = 0
     @State var cam_yaw: Float = 0
     
+    @State var fun: String = "x * x + z * z"
+    
     var body: some View {
         VStack {
-            SidePanel()
+            SidePanel(fun: $fun)
                 .frame(height: 50)
             
-            MetalView(cam_pitch: cam_pitch, cam_yaw: cam_yaw)
+            MetalView(cam_pitch: cam_pitch, cam_yaw: cam_yaw, fun: fun)
                 .frame(width: 800, height: 800)
                 .gesture(
                     DragGesture()

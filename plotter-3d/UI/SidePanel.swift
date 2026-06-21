@@ -9,26 +9,13 @@ import SwiftUI
 
 struct SidePanel: View {
     
-    @State var text: String = "x"
+    @Binding var fun: String
     
     var body: some View {
         
         HStack {
             Text("f(x, z) = ")
-            TextField("x + z", text: $text)
-                .onChange(of: text) {
-                    guard let tokens = Lexer.tokenize(text) else {
-                        print("error lex")
-                        return
-                    }
-                    print(tokens)
-                    
-                    guard let tree = Parser.parse(tokens) else {
-                        print("error parse")
-                        return
-                    }
-                    print(tree)
-                }
+            TextField("type an expression", text: $fun)
         }
         .padding()
     }

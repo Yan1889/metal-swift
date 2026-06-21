@@ -12,6 +12,7 @@ struct MetalView: NSViewRepresentable {
     
     var cam_pitch: Float = 0
     var cam_yaw: Float = 0
+    var fun: String
     
     func makeNSView(context: Context) -> some NSView {
         let view = MetalMtkView()
@@ -22,6 +23,7 @@ struct MetalView: NSViewRepresentable {
     func updateNSView(_ nsView: NSViewType, context: Context) {
         context.coordinator.renderer?.cam_pitch = cam_pitch
         context.coordinator.renderer?.cam_yaw = cam_yaw
+        context.coordinator.renderer?.updateMeshPipeline(fun)
     }
     
     func makeCoordinator() -> Coordinator {

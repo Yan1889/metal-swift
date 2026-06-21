@@ -36,6 +36,7 @@ class Renderer: NSObject, MTKViewDelegate {
     private var computePSO_grid: MTLComputePipelineState!
     
     private var axes: [Line3d] = []
+    private var fun_str: String = ""
     
     private var zoom: Float = 1
     
@@ -174,25 +175,50 @@ class Renderer: NSObject, MTKViewDelegate {
     }
     
     func setupComputePipeline() {
-        computePSO_vertices = try! device.makeComputePipelineState(function: lib.makeFunction(name: "generateMesh")!)
         computePSO_reduceArray = try! device.makeComputePipelineState(function: lib.makeFunction(name: "reduceArray")!)
         computePSO_colorVertices = try! device.makeComputePipelineState(function: lib.makeFunction(name: "colorVertices")!)
-        computePSO_grid = try! device.makeComputePipelineState(function: lib.makeFunction(name: "generateGrid")!)
     }
     
     func setupBuffers() {
-        // 'cpu'
         setupAxes()
         setup_x_z_plane_grid()
-        
-        // 'gpu'
         setupBuffer_x_z_plane()
+    }
+    
+    func updateMeshPipeline(_ fun_str: String) {
+        if self.fun_str == fun_str {
+            // there was no change
+            return
+        }
+        
+        self.fun_str = fun_str
+        
+        let sourceURL: URL = Bundle.main.url(
+            forResource: "MeshGenerationTemplate.metal",
+            withExtension: "txt"
+        )!
+        
+        var source = try! String(contentsOf: sourceURL, encoding: .utf8)
+        
+        source.replace("// __BODY__", with: "return \(fun_str);")
+        
+        guard let library = try? device.makeLibrary(source: source, options: nil) else {
+            // malformed function expression from user could lead to syntax error etc.
+            return
+        }
+        
+        let fun_mesh = library.makeFunction(name: "generateMesh")!
+        let fun_grid = library.makeFunction(name: "generateGrid")!
+        computePSO_vertices = try! device.makeComputePipelineState(function: fun_mesh)
+        computePSO_grid = try! device.makeComputePipelineState(function: fun_grid)
+        
         setupBuffers_Graph()
     }
     
     func setupBuffers_Graph() {
         let clock = ContinuousClock()
         let start = clock.now
+        
         
         // graph mesh
         let resolution_graph: Int = 100
@@ -288,7 +314,7 @@ class Renderer: NSObject, MTKViewDelegate {
     }
     
     func setupBuffer_x_z_plane() {
-        let color = SIMD4<Float>(0.7, 0.7, 0.7, 0.8);
+        let color = SIMD4<Float>(0.7, 0.7, 0.7, 0.8)
         
         let vertices: [Vertex] = [
             Vertex(pos: [-1.5, 0, -1.5, 1], col: color),
