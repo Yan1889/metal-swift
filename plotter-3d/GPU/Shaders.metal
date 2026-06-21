@@ -5,39 +5,7 @@
 //  Created by Yan Amin on 13.06.26.
 //
 
-#include <metal_stdlib>
-using namespace metal;
-
-struct VertexIn {
-    float4 pos [[attribute(0)]];
-    float4 color [[attribute(1)]];
-};
-
-struct VertexOut {
-    float4 pos [[position]];
-    float4 color;
-};
-
-struct VertexUniforms {
-    float4x4 mvp_matrix;
-};
-
-vertex VertexOut vertexShader(VertexIn in [[stage_in]],
-                              constant VertexUniforms &uniforms [[buffer(1)]]) {
-    VertexOut out;
-    out.pos = uniforms.mvp_matrix * in.pos;
-    out.color = in.color;
-    return out;
-}
-
-fragment float4 fragmentShader(VertexOut v [[stage_in]]) {
-    return v.color;
-}
-
-float4 brightColor(float t);
-
-#define GRAY float4(0.5, 0.5, 0.5, 1.0)
-#define ORANGE float4(1.0, 0.6, 0.0, 1.0)
+#include "Shared.h"
 
 float function_to_graph(float x, float z) {
     return x * x - z * z;
@@ -45,16 +13,6 @@ float function_to_graph(float x, float z) {
     // return sin(15 * x) + sin(15 * z);
 }
 
-constant int quad_indices[6][2] = {
-    // triangle #1
-    {0, 0},
-    {1, 0},
-    {1, 1},
-    // triangle #2
-    {0, 0},
-    {0, 1},
-    {1, 1},
-};
 
 kernel void generateMesh(constant int    &resolution [[buffer(0)]],
                          device VertexIn *vertices   [[buffer(1)]],
@@ -150,48 +108,19 @@ kernel void generateGrid(constant int      &line_count     [[buffer(0)]],
     }
     
     if (segment == segment_count - 1) {
+        // the last vertex of a line cannot be connected to 'the next vertex'
         return;
     }
     
     // 1 quad for every thread
     device uint *is = indices + 2 * 6 * wrap(line, segment);
     
-    if (along_x) {
-        // use first 6
-        // use only the first 2 vertices
-        
-        // triangle #1
-        is[0] = 4 * wrap(line, segment + 0) + 0;
-        is[1] = 4 * wrap(line, segment + 0) + 1;
-        is[2] = 4 * wrap(line, segment + 1) + 1;
-        // triangle #2
-        is[3] = 4 * wrap(line, segment + 0) + 0;
-        is[4] = 4 * wrap(line, segment + 1) + 0;
-        is[5] = 4 * wrap(line, segment + 1) + 1;
-    } else {
-        // use last 6
-        // use only the last 2 vertices
-        // triangle #1
-        is[6] = 4 * wrap(line, segment + 0) + 2;
-        is[7] = 4 * wrap(line, segment + 0) + 3;
-        is[8] = 4 * wrap(line, segment + 1) + 3;
-        // triangle #2
-        is[9]  = 4 * wrap(line, segment + 0) + 2;
-        is[10] = 4 * wrap(line, segment + 1) + 2;
-        is[11] = 4 * wrap(line, segment + 1) + 3;
+    int offset_index = along_x ? 0 : 6;
+    int offset_vertex = along_x ? 0 : 2;
+    
+    for (int i = 0; i < 6; i++) {
+        is[i + offset_index] = 4 * wrap(line, segment + quad_indices[i][0]) + quad_indices[i][1] + offset_vertex;
     }
-}
-
-float4 brightColor(float t) {
-    // Clamp just in case
-    float x = max(0.0, min(1.0, t));
-    
-    // Frequency-shifted phase offsets for R, G, B
-    float r = 0.5 + 0.5 * cos(2.0 * M_PI_F * (x + 0.0/3.0));
-    float g = 0.5 + 0.5 * cos(2.0 * M_PI_F * (x + 1.0/3.0));
-    float b = 0.5 + 0.5 * cos(2.0 * M_PI_F * (x + 2.0/3.0));
-    
-    return float4(r, g, b, 1.0);
 }
 
 kernel void reduceArray(constant int &entries [[buffer(0)]],
