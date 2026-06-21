@@ -55,6 +55,7 @@
 				2CCBD83E2FDDB03700EB3465 /* Sources */,
 				2CCBD83F2FDDB03700EB3465 /* Frameworks */,
 				2CCBD8402FDDB03700EB3465 /* Resources */,
+				2C16D2172FE824F3004D83CA /* ShellScript */,
 			);
 			buildRules = (
 			);
@@ -113,6 +114,26 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		2C16D2172FE824F3004D83CA /* ShellScript */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# Cross-platform path that works for both iOS and macOS bundles\nDEST_DIR=\"${BUILT_PRODUCTS_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}\"\n\n# Ensure the destination directory exists, then copy the file raw\nmkdir -p \"$DEST_DIR\"\ncp \"${SRCROOT}/plotter-3d/GPU/MeshGenerationTemplate.metal\" \"$DEST_DIR/\"\n";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		2CCBD83E2FDDB03700EB3465 /* Sources */ = {
@@ -253,6 +274,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
@@ -283,6 +305,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";

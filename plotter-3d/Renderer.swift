@@ -194,8 +194,8 @@ class Renderer: NSObject, MTKViewDelegate {
         self.fun_str = fun_str
         
         let sourceURL: URL = Bundle.main.url(
-            forResource: "MeshGenerationTemplate.metal",
-            withExtension: "txt"
+            forResource: "MeshGenerationTemplate",
+            withExtension: "metal"
         )!
         
         var source = try! String(contentsOf: sourceURL, encoding: .utf8)
