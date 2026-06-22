@@ -17,6 +17,7 @@ struct ContentView: View {
             resolution_grid_lines: 10,
             resolution_grid_segments: 100,
             fun: "x * x - z * z + 1",
+            color: .Continuous
         ),
         pull: PullSettings(
             cam_pitch: 0,

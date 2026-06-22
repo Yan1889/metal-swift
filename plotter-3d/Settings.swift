@@ -15,6 +15,13 @@ struct PushSettings: Equatable {
     var resolution_grid_lines: Int
     var resolution_grid_segments: Int
     var fun: String
+    var color: ColorSettings
+}
+
+enum ColorSettings: Equatable {
+    case Custom(SIMD4<Float>)
+    case Continuous
+    case Discrete
 }
 
 struct PullSettings {
