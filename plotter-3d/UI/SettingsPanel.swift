@@ -9,13 +9,7 @@ import SwiftUI
 
 struct SettingsPanel: View {
     
-    @Binding var smoothGradient: Bool
-
-    @Binding var resolution_graph: Float
-    @Binding var resolution_grid_lines: Float
-    @Binding var resolution_grid_segments: Float
-    
-    @Binding var fun: String
+    @Binding var settings: Settings
     
     @State var color: CGColor = .black
     
@@ -25,7 +19,7 @@ struct SettingsPanel: View {
         VStack {
             HStack {
                 Text("f(x, z) = ")
-                TextField("type an expression", text: $fun)
+                TextField("type an expression", text: $settings.push.fun)
                 Toggle("custom:", isOn: $customColor)
                     .toggleStyle(.switch)
                 ColorPicker("my picker", selection: $color)
@@ -38,12 +32,19 @@ struct SettingsPanel: View {
             Text("--- Settings ---")
                 .font(.title)
             
-            Toggle("Smooth Gradient", isOn: $smoothGradient)
+            Toggle("Smooth Gradient", isOn: $settings.pull.smoothGradient)
                 .toggleStyle(.switch)
             
-            Slider(value: $resolution_graph, in: 2...100)
-            Slider(value: $resolution_grid_lines, in: 2...100)
-            Slider(value: $resolution_grid_segments, in: 2...100)
+            Slider(value: floatBinding(i: $settings.push.resolution_graph), in: 2...100)
+            Slider(value: floatBinding(i: $settings.push.resolution_grid_lines), in: 2...100)
+            Slider(value: floatBinding(i: $settings.push.resolution_grid_segments), in: 2...100)
         }
+    }
+    
+    func floatBinding(i: Binding<Int>) -> Binding<Float> {
+        Binding(
+            get: { Float(i.wrappedValue) },
+            set: { i.wrappedValue = Int($0) }
+        )
     }
 }

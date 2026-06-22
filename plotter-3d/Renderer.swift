@@ -38,42 +38,11 @@ class Renderer: NSObject, MTKViewDelegate {
     
     private var axes: [Line3d] = []
     
-    // variables the user controls (push)
-    private var fun_str: String
-    private var resolution_graph: Int
-    private var resolution_grid_lines: Int
-    private var resolution_grid_segments: Int
+    private var settings: Settings
     
-    // variables the user controls (pull)
-    public var smoothGradient: Bool
-    public var cam_dist: Float
-    public var cam_pitch: Float
-    public var cam_yaw: Float
-    
-    init(
-        view: MetalMtkView,
-        // 'push'
-        fun_str: String,
-        resolution_graph: Int,
-        resolution_grid_lines: Int,
-        resolution_grid_segments: Int,
-        // 'pull'
-        smoothGradient: Bool,
-        cam_dist: Float,
-        cam_pitch: Float,
-        cam_yaw: Float,
-    ) {
+    init(view: MetalMtkView, settings: Settings) {
         self.view = view
-        // 'push'
-        self.fun_str = fun_str
-        self.resolution_graph = resolution_graph
-        self.resolution_grid_lines = resolution_grid_lines
-        self.resolution_grid_segments = resolution_grid_segments
-        // 'pull'
-        self.smoothGradient = smoothGradient
-        self.cam_dist = cam_dist
-        self.cam_pitch = cam_pitch
-        self.cam_yaw = cam_yaw
+        self.settings = settings
         
         device = MTLCreateSystemDefaultDevice()!
         lib = device.makeDefaultLibrary()!
@@ -216,18 +185,21 @@ class Renderer: NSObject, MTKViewDelegate {
         setupAxes()
         setup_x_z_plane_grid()
         setupBuffer_x_z_plane()
-        updateMeshPipeline(nil)
+        updateMeshPipeline()
+    }
+    
+    func updateSettings(_ new_settings: Settings) {
+        if settings.push == new_settings.push {
+            settings.pull = new_settings.pull
+            return
+        }
+        
+        settings = new_settings
+        updateMeshPipeline()
     }
     
     /// the pipeline only gets compiled newly if the argument is `nil` or different from `self.fun_str`
-    func updateMeshPipeline(_ f: String?) {
-        if let unwrapped = f {
-            if unwrapped == fun_str {
-                return
-            }
-            fun_str = unwrapped
-        }
-        
+    func updateMeshPipeline() {
         let sourceURL: URL = Bundle.main.url(
             forResource: "MeshGenerationTemplate",
             withExtension: "metal"
@@ -235,7 +207,7 @@ class Renderer: NSObject, MTKViewDelegate {
         
         var source = try! String(contentsOf: sourceURL, encoding: .utf8)
         
-        source.replace("// __BODY__", with: "return \(fun_str);")
+        source.replace("// __BODY__", with: "return \(settings.push.fun);")
         
         guard let library = try? device.makeLibrary(source: source, options: nil) else {
             // malformed function expression from user could lead to syntax error etc.
@@ -250,36 +222,22 @@ class Renderer: NSObject, MTKViewDelegate {
         setupBuffers_Graph()
     }
     
-    func setResolutions(resolution_graph: Int, resolution_grid_lines: Int, resolution_grid_segments: Int) {
-        if self.resolution_graph == resolution_graph &&
-            self.resolution_grid_lines == resolution_grid_lines &&
-            self.resolution_grid_segments == resolution_grid_segments
-        {
-            return // there was no change
-        }
-        self.resolution_graph = resolution_graph
-        self.resolution_grid_lines = resolution_grid_lines
-        self.resolution_grid_segments = resolution_grid_segments
-        
-        setupBuffers_Graph()
-    }
-    
     func setupBuffers_Graph() {
         let clock = ContinuousClock()
         let start = clock.now
         
         // graph mesh
-        let vertex_count_graph: Int = resolution_graph * resolution_graph
-        let quad_count_graph: Int = (resolution_graph - 1) * (resolution_graph - 1)
+        let vertex_count_graph: Int = settings.push.resolution_graph * settings.push.resolution_graph
+        let quad_count_graph: Int = (settings.push.resolution_graph - 1) * (settings.push.resolution_graph - 1)
         
         // grid mesh
-        let vertex_count_grid: Int = 2 * resolution_grid_lines * (resolution_grid_segments - 1) * 2
-        let quad_count_grid: Int = 2 * resolution_grid_lines * resolution_grid_segments
+        let vertex_count_grid: Int = 2 * settings.push.resolution_grid_lines * (settings.push.resolution_grid_segments - 1) * 2
+        let quad_count_grid: Int = 2 * settings.push.resolution_grid_lines * settings.push.resolution_grid_segments
         
         // variables to pass to shaders
-        var resolution_graph_int32 = Int32(resolution_graph)
-        var grid_line_count_int32 = Int32(resolution_grid_lines)
-        var grid_segment_count_int32 = Int32(resolution_grid_segments)
+        var resolution_graph_int32 = Int32(settings.push.resolution_graph)
+        var grid_line_count_int32 = Int32(settings.push.resolution_grid_lines)
+        var grid_segment_count_int32 = Int32(settings.push.resolution_grid_segments)
         var grid_line_width: Float = 0.003
         
         // threads per group and threads per grid
@@ -287,8 +245,8 @@ class Renderer: NSObject, MTKViewDelegate {
         let max_threads_sqrt = Int(Float(max_threads).squareRoot())
         let threads_per_group_1d   = MTLSize(width: max_threads           , height: 1                       , depth: 1)
         let threads_per_group_2d   = MTLSize(width: max_threads_sqrt      , height: max_threads_sqrt        , depth: 1)
-        let threads_per_grid_graph = MTLSize(width: resolution_graph      , height: resolution_graph        , depth: 1)
-        let threads_per_grid_grid  = MTLSize(width: resolution_grid_lines , height: resolution_grid_segments, depth: 2)
+        let threads_per_grid_graph = MTLSize(width: settings.push.resolution_graph      , height: settings.push.resolution_graph        , depth: 1)
+        let threads_per_grid_grid  = MTLSize(width: settings.push.resolution_grid_lines , height: settings.push.resolution_grid_segments, depth: 2)
         
         let minMaxBufA = device.makeBuffer(length: 2 * 4 * vertex_count_graph)!
         let minMaxBufB = device.makeBuffer(length: 2 * 4 * vertex_count_graph)!
@@ -467,9 +425,9 @@ class Renderer: NSObject, MTKViewDelegate {
         pass.colorAttachments[0].storeAction = .store
         
         let cam_pos = SIMD3<Float>(
-            cam_dist * cos(cam_pitch) * sin(cam_yaw),
-            cam_dist * sin(cam_pitch),
-            cam_dist * cos(cam_pitch) * cos(cam_yaw),
+            settings.pull.cam_dist * cos(settings.pull.cam_pitch) * sin(settings.pull.cam_yaw),
+            settings.pull.cam_dist * sin(settings.pull.cam_pitch),
+            settings.pull.cam_dist * cos(settings.pull.cam_pitch) * cos(settings.pull.cam_yaw),
         )
         
         let model = matrix_identity_float4x4
@@ -501,7 +459,7 @@ class Renderer: NSObject, MTKViewDelegate {
         )
             
         encoder.setVertexBuffer(
-            smoothGradient ? vertexBuffer_graphContinuous : vertexBuffer_graphDiscrete,
+            settings.pull.smoothGradient ? vertexBuffer_graphContinuous : vertexBuffer_graphDiscrete,
             offset: 0,
             index: 0,
         )

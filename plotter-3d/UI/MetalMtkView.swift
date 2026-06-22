@@ -8,11 +8,11 @@
 import MetalKit
 
 class MetalMtkView: MTKView {
-    
     var renderer: Renderer?
     
+    var callback: ((Float) -> Void)?
+    
     override func scrollWheel(with event: NSEvent) {
-        let dd = -Float(event.deltaY) * 0.01
-        renderer!.cam_dist += dd
+        callback?(-Float(event.deltaY) * 0.01)
     }
 }

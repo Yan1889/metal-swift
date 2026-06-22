@@ -10,28 +10,14 @@ import SwiftUI
 
 struct MetalView: NSViewRepresentable {
     
-    var cam_pitch: Float
-    var cam_yaw: Float
-    var fun: String
-    var smoothGradient: Bool
-    
-    var resolution_graph: Float
-    var resolution_grid_lines: Float
-    var resolution_grid_segments: Float
+    @Binding var settings: Settings
     
     func makeNSView(context: Context) -> some NSView {
         let view = MetalMtkView()
-        context.coordinator.renderer = Renderer(
-            view: view,
-            fun_str: fun,
-            resolution_graph: Int(resolution_graph),
-            resolution_grid_lines: Int(resolution_grid_lines),
-            resolution_grid_segments: Int(resolution_grid_segments),
-            smoothGradient: smoothGradient,
-            cam_dist: 5,
-            cam_pitch: cam_pitch,
-            cam_yaw: cam_yaw,
-        )
+        view.callback = { x in
+            settings.pull.cam_dist += x
+        }
+        context.coordinator.renderer = Renderer(view: view, settings: settings)
         return view
     }
     
@@ -41,18 +27,7 @@ struct MetalView: NSViewRepresentable {
             return
         }
         
-        // have to modify buffer data (push once)
-        r.updateMeshPipeline(fun)
-        r.setResolutions(
-            resolution_graph: Int(resolution_graph),
-            resolution_grid_lines: Int(resolution_grid_lines),
-            resolution_grid_segments: Int(resolution_grid_segments),
-        )
-        
-        // automatically updated (polled every frame)
-        r.cam_pitch = cam_pitch
-        r.cam_yaw = cam_yaw
-        r.smoothGradient = smoothGradient
+        r.updateSettings(settings)
     }
     
     func makeCoordinator() -> Coordinator {
