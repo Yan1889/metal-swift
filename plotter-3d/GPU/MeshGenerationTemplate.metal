@@ -57,13 +57,16 @@ kernel void generateMesh(constant int    &resolution [[buffer(0)]],
         indices[startIdx + k] = (i + quad_indices[k][0]) * resolution + (j + quad_indices[k][1]);
     }
 }
-
 kernel void generateGrid(constant int      &line_count     [[buffer(0)]],
                          constant int      &segment_count  [[buffer(1)]],
                          constant float    &line_width     [[buffer(2)]],
                          device   VertexIn *vertices       [[buffer(3)]],
                          device   uint     *indices        [[buffer(4)]],
                          uint3 id [[thread_position_in_grid]]) {
+        
+    auto wrap = [segment_count](int l, int s) {
+        return l * segment_count + s;
+    };
     
     int line = id.x;
     int segment = id.y;
@@ -78,57 +81,54 @@ kernel void generateGrid(constant int      &line_count     [[buffer(0)]],
         x = 2.0 * float(line)    / float(line_count - 1)    - 1.0;
     }
     
-    float x1, x2, z1, z2;
+    float y = function_to_graph(x, z);
+    
+
+    
+    // 4 vertices for each thread
+    device VertexIn *vs = vertices + 2 * 4 * wrap(line, segment);
     
     if (along_x) {
-        x1 = x;
-        x2 = x;
+        // x does not change at this vertex
+        vs[0].pos = float4(x, y - line_width, z - line_width, 1);
+        vs[1].pos = float4(x, y - line_width, z + line_width, 1);
+        vs[2].pos = float4(x, y + line_width, z + line_width, 1);
+        vs[3].pos = float4(x, y + line_width, z - line_width, 1);
         
-        z1 = z - line_width;
-        z2 = z + line_width;
-    } else {
-        x1 = x - line_width;
-        x2 = x + line_width;
-        
-        z1 = z;
-        z2 = z;
-    }
-    float y1 = function_to_graph(x1, z1) + 0.01;
-    float y2 = function_to_graph(x2, z2) + 0.01;
-    
-    auto wrap = [segment_count](int l, int s) {
-        return l * segment_count + s;
-    };
-    
-    // 2 vertices for each thread
-    device VertexIn *vs = vertices + 4 * wrap(line, segment);
-    
-    if (along_x) {
-        // `vs[0]` and `vs[1]`
-        vs[0].pos = float4(x1, y1, z1, 1);
-        vs[1].pos = float4(x2, y2, z2, 1);
         vs[0].color = float4(0, 0, 0, 1);
         vs[1].color = float4(0, 0, 0, 1);
-    } else {
-        // `vs[2]` and `vs[3]`
-        vs[2].pos = float4(x1, y1, z1, 1);
-        vs[3].pos = float4(x2, y2, z2, 1);
         vs[2].color = float4(0, 0, 0, 1);
         vs[3].color = float4(0, 0, 0, 1);
+    } else {
+        // z does not change at this vertex
+        vs[4].pos = float4(x - line_width, y - line_width, z, 1);
+        vs[5].pos = float4(x + line_width, y - line_width, z, 1);
+        vs[6].pos = float4(x + line_width, y + line_width, z, 1);
+        vs[7].pos = float4(x - line_width, y + line_width, z, 1);
+        
+        vs[4].color = float4(0, 0, 0, 1);
+        vs[5].color = float4(0, 0, 0, 1);
+        vs[6].color = float4(0, 0, 0, 1);
+        vs[7].color = float4(0, 0, 0, 1);
     }
     
     if (segment == segment_count - 1) {
         // the last vertex of a line cannot be connected to 'the next vertex'
         return;
     }
+
+    // 4 quads for every thread
+    device uint *is = indices + 2 * 4 * 6 * wrap(line, segment);
     
-    // 1 quad for every thread
-    device uint *is = indices + 2 * 6 * wrap(line, segment);
+    if (!along_x) {
+        is += 24;
+    }
     
-    int offset_index = along_x ? 0 : 6;
-    int offset_vertex = along_x ? 0 : 2;
+    int offset_vertex = along_x ? 0 : 4;
     
     for (int i = 0; i < 6; i++) {
-        is[i + offset_index] = 4 * wrap(line, segment + quad_indices[i][0]) + quad_indices[i][1] + offset_vertex;
+        for (int j = 0; j < 4; j++) {
+            is[i + 6 * j]  = 2 * 4 * wrap(line, segment + quad_indices[i][0]) + (quad_indices[i][1] + j) % 4 + offset_vertex;
+        }
     }
 }

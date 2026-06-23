@@ -103,6 +103,20 @@ struct SettingsPanel: View {
                 )
                     .fixedSize()
             }
+            
+            HStack {
+                Text("Grid Thickness:")
+                Slider(
+                    value: $settings.push.grid_thickness,
+                    in: 0...0.05
+                )
+                TextField(
+                    "",
+                    value: $settings.push.grid_thickness,
+                    format: .number.precision(.fractionLength(3))
+                )
+                    .fixedSize()
+            }
         }
     }
     

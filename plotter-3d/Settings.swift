@@ -14,6 +14,7 @@ struct PushSettings: Equatable {
     var resolution_graph: Int
     var resolution_grid_lines: Int
     var resolution_grid_segments: Int
+    var grid_thickness: Float
     var fun: String
     var color: ColorSettings
 }

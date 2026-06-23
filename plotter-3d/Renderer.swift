@@ -231,14 +231,13 @@ class Renderer: NSObject, MTKViewDelegate {
         let quad_count_graph: Int = (settings.push.resolution_graph - 1) * (settings.push.resolution_graph - 1)
         
         // grid mesh
-        let vertex_count_grid: Int = 2 * settings.push.resolution_grid_lines * (settings.push.resolution_grid_segments - 1) * 2
+        let vertex_count_grid: Int = 4 * settings.push.resolution_grid_lines * (settings.push.resolution_grid_segments - 1) * 2
         let quad_count_grid: Int = 2 * settings.push.resolution_grid_lines * settings.push.resolution_grid_segments
         
         // variables to pass to shaders
         var resolution_graph_int32 = Int32(settings.push.resolution_graph)
         var grid_line_count_int32 = Int32(settings.push.resolution_grid_lines)
         var grid_segment_count_int32 = Int32(settings.push.resolution_grid_segments)
-        var grid_line_width: Float = 0.003
         
         // threads per group and threads per grid
         let max_threads = computePSO_vertices.threadExecutionWidth
@@ -257,7 +256,7 @@ class Renderer: NSObject, MTKViewDelegate {
         vertexBuffer_grid            = device.makeBuffer(length: vertex_count_grid  * MemoryLayout<Vertex>.stride)
         
         indexBuffer_graph = device.makeBuffer(length: quad_count_graph * 6 * 4)
-        indexBuffer_grid  = device.makeBuffer(length: quad_count_grid  * 2 * 6 * 4)
+        indexBuffer_grid  = device.makeBuffer(length: quad_count_grid  * 4 * 2 * 6 * 4)
         
         let commandBuffer = commandQueue.makeCommandBuffer()!
         let encoder = commandBuffer.makeComputeCommandEncoder()!
@@ -277,7 +276,7 @@ class Renderer: NSObject, MTKViewDelegate {
         encoder.setComputePipelineState(computePSO_grid)
         encoder.setBytes(&grid_line_count_int32,    length: 4, index: 0)
         encoder.setBytes(&grid_segment_count_int32, length: 4, index: 1)
-        encoder.setBytes(&grid_line_width,  length: 4, index: 2)
+        encoder.setBytes(&settings.push.grid_thickness,  length: 4, index: 2)
         encoder.setBuffer(vertexBuffer_grid, offset: 0, index: 3)
         encoder.setBuffer(indexBuffer_grid,  offset: 0, index: 4)
         encoder.dispatchThreads(threads_per_grid_grid, threadsPerThreadgroup: threads_per_group_2d)
