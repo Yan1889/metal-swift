@@ -231,7 +231,7 @@ class Renderer: NSObject, MTKViewDelegate {
         let quad_count_graph: Int = (settings.push.resolution_graph - 1) * (settings.push.resolution_graph - 1)
         
         // grid mesh
-        let vertex_count_grid: Int = 4 * settings.push.resolution_grid_lines * (settings.push.resolution_grid_segments - 1) * 2
+        let vertex_count_grid: Int = 4 * settings.push.resolution_grid_lines * settings.push.resolution_grid_segments * 2
         let quad_count_grid: Int = 2 * settings.push.resolution_grid_lines * settings.push.resolution_grid_segments
         
         // variables to pass to shaders
