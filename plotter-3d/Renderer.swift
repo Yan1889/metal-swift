@@ -285,23 +285,15 @@ class Renderer: NSObject, MTKViewDelegate {
         // reduce the min/max array until only one entry is left
         var min_max_entries = Int32(vertex_count_graph)
         while min_max_entries > 1 {
-            
-            min_max_entries = (min_max_entries + 1) / 2
             let threads_per_grid = MTLSize(width: Int(min_max_entries), height: 1, depth: 1)
-
+            
             encoder.setComputePipelineState(computePSO_reduceArray)
             encoder.setBytes(&min_max_entries, length: 4, index: 0)
-
-            if is_A_src {
-                encoder.setBuffer(minMaxBufA, offset: 0, index: 1)
-                encoder.setBuffer(minMaxBufB, offset: 0, index: 2)
-                encoder.dispatchThreads(threads_per_grid, threadsPerThreadgroup: threads_per_group_1d)
-            } else {
-                encoder.setBuffer(minMaxBufB, offset: 0, index: 1)
-                encoder.setBuffer(minMaxBufA, offset: 0, index: 2)
-                encoder.dispatchThreads(threads_per_grid, threadsPerThreadgroup: threads_per_group_1d)
-            }
+            encoder.setBuffer(is_A_src ? minMaxBufA : minMaxBufB, offset: 0, index: 1)
+            encoder.setBuffer(is_A_src ? minMaxBufB : minMaxBufA, offset: 0, index: 2)
+            encoder.dispatchThreads(threads_per_grid, threadsPerThreadgroup: threads_per_group_1d)
             
+            min_max_entries = (min_max_entries + 1) / 2
             is_A_src.toggle()
         }
         
