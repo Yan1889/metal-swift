@@ -21,8 +21,7 @@ class Renderer: NSObject, MTKViewDelegate {
     
     // render pipeline
     private var renderPSO: MTLRenderPipelineState!
-    private var vertexBuffer_graphContinuous: MTLBuffer!
-    private var vertexBuffer_graphDiscrete: MTLBuffer!
+    private var vertexBuffer_graph: MTLBuffer!
     private var indexBuffer_graph: MTLBuffer!
     private var vertexBuffer_grid: MTLBuffer!
     private var indexBuffer_grid: MTLBuffer!
@@ -249,8 +248,7 @@ class Renderer: NSObject, MTKViewDelegate {
         let minMaxBufB = device.makeBuffer(length: 2 * 4 * vertex_count_graph)!
         var is_A_src = true
         
-        vertexBuffer_graphContinuous = device.makeBuffer(length: vertex_count_graph * MemoryLayout<Vertex>.stride)
-        vertexBuffer_graphDiscrete   = device.makeBuffer(length: vertex_count_graph * MemoryLayout<Vertex>.stride)
+        vertexBuffer_graph = device.makeBuffer(length: vertex_count_graph * MemoryLayout<Vertex>.stride)
         vertexBuffer_grid            = device.makeBuffer(length: vertex_count_grid  * MemoryLayout<Vertex>.stride)
         
         indexBuffer_graph = device.makeBuffer(length: quad_count_graph * 6 * 4)
@@ -262,12 +260,9 @@ class Renderer: NSObject, MTKViewDelegate {
         // generate the vertices
         encoder.setComputePipelineState(computePSO_vertices)
         encoder.setBytes(&resolution_graph_int32, length: 4, index: 0)
-        encoder.setBuffer(vertexBuffer_graphContinuous, offset: 0, index: 1)
+        encoder.setBuffer(vertexBuffer_graph, offset: 0, index: 1)
         encoder.setBuffer(indexBuffer_graph, offset: 0, index: 2)
         encoder.setBuffer(minMaxBufA, offset: 0, index: 3)
-        encoder.dispatchThreads(threads_per_grid_graph, threadsPerThreadgroup: threads_per_group_2d)
-        // discrete
-        encoder.setBuffer(vertexBuffer_graphDiscrete, offset: 0, index: 1)
         encoder.dispatchThreads(threads_per_grid_graph, threadsPerThreadgroup: threads_per_group_2d)
         
         // generate the grid
@@ -295,20 +290,11 @@ class Renderer: NSObject, MTKViewDelegate {
             is_A_src.toggle()
         }
         
-        // :(
-        var int8_true: UInt8 = 1
-        var int8_false: UInt8 = 0
-        
-        // color continuous
+        // color vertices
         encoder.setComputePipelineState(computePSO_colorVertices)
         encoder.setBuffer(is_A_src ? minMaxBufA : minMaxBufB, offset: 0, index: 0)
         encoder.setBytes(&resolution_graph_int32, length: 4, index: 1)
-        encoder.setBytes(&int8_true, length: 1, index: 2)
-        encoder.setBuffer(vertexBuffer_graphContinuous, offset: 0, index: 3)
-        encoder.dispatchThreads(threads_per_grid_graph, threadsPerThreadgroup: threads_per_group_2d)
-        // color discrete
-        encoder.setBytes(&int8_false, length: 1, index: 2)
-        encoder.setBuffer(vertexBuffer_graphDiscrete, offset: 0, index: 3)
+        encoder.setBuffer(vertexBuffer_graph, offset: 0, index: 4)
         encoder.dispatchThreads(threads_per_grid_graph, threadsPerThreadgroup: threads_per_group_2d)
 
         encoder.endEncoding()
@@ -452,11 +438,7 @@ class Renderer: NSObject, MTKViewDelegate {
             index: 1
         )
             
-        encoder.setVertexBuffer(
-            pullSets.smoothGradient ? vertexBuffer_graphContinuous : vertexBuffer_graphDiscrete,
-            offset: 0,
-            index: 0,
-        )
+        encoder.setVertexBuffer(vertexBuffer_graph, offset: 0, index: 0)
         encoder.drawIndexedPrimitives(
             type: .triangle,
             indexCount: indexBuffer_graph.length / 4,

@@ -13,18 +13,6 @@ struct SettingsPanel: View {
     
     @Binding var settings: Settings
     
-    var isCustomColor: Bool {
-        get {
-            switch settings.push.color {
-            case .Custom(_): true
-            default: false
-            }
-        }
-        set {
-            
-        }
-    }
-    
     var body: some View {
         VStack {
             HStack {
@@ -40,9 +28,6 @@ struct SettingsPanel: View {
             }
             
             Spacer()
-            
-            Toggle("Smooth Gradient", isOn: $settings.pull.smoothGradient)
-                .toggleStyle(.switch)
             
             HStack {
                 Text("Graph Resolution:")

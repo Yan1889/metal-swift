@@ -15,7 +15,6 @@ struct ContentView: View {
     
     @State var settings = Settings(
         push: PushSettings(
-            color: .Continuous,
             resolution_graph: 100,
             resolution_grid_lines: 10,
             resolution_grid_segments: 100,
@@ -26,7 +25,6 @@ struct ContentView: View {
             cam_pitch: 0,
             cam_yaw: 0,
             cam_dist: 5,
-            smoothGradient: true,
             compiled: true,
         )
     )

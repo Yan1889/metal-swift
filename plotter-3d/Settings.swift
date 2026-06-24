@@ -14,12 +14,10 @@ struct PullSettings {
     var cam_pitch: Float
     var cam_yaw: Float
     var cam_dist: Float
-    var smoothGradient: Bool
     var compiled: Bool
 }
 
 struct PushSettings: Equatable {
-    var color: ColorSettings
     var resolution_graph: Int
     var resolution_grid_lines: Int
     var resolution_grid_segments: Int
