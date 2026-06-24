@@ -11,6 +11,10 @@ import SwiftUI
 
 import simd
 
+struct Vertex {
+    let pos: SIMD4<Float>
+    let col: SIMD4<Float>
+}
 
 class Renderer: NSObject, MTKViewDelegate {
     private let view: MetalMtkView
@@ -37,13 +41,14 @@ class Renderer: NSObject, MTKViewDelegate {
     private var computePSO_grid: MTLComputePipelineState!
     
     private var axes: [Line3d] = []
+    private var grid_lines: [Line3d] = []
     
-    var settings: Binding<Settings>
-    var previousPushSettings: PushSettings
+    private var settings: Binding<Settings>
+    private var previousPushSettings: PushSettings
     
     // helpers
-    var pullSets: PullSettings { settings.pull.wrappedValue }
-    var pushSets: PushSettings { settings.push.wrappedValue }
+    private var pullSets: PullSettings { settings.pull.wrappedValue }
+    private var pushSets: PushSettings { settings.push.wrappedValue }
     
     init(view: MetalMtkView, settings: Binding<Settings>) {
         self.view = view
@@ -77,11 +82,6 @@ class Renderer: NSObject, MTKViewDelegate {
         view.colorPixelFormat = .bgra8Unorm
         view.clearColor = MTLClearColor(red: 0.3, green: 0.3, blue: 0.3, alpha: 1)
         view.depthStencilPixelFormat = .depth32Float
-    }
-        
-    struct Vertex {
-        let pos: SIMD4<Float>
-        let col: SIMD4<Float>
     }
     
     func setupRenderPipeline() {
@@ -307,7 +307,7 @@ class Renderer: NSObject, MTKViewDelegate {
             ]
             
             for (start, end) in arr {
-                axes.append(Line3d(
+                grid_lines.append(Line3d(
                     start: start,
                     end: end,
                     thickness: 0.003,
@@ -359,22 +359,17 @@ class Renderer: NSObject, MTKViewDelegate {
             near: 0.1,
             far: 100,
         )
-        var mvp = projection * view * model
+        let projection_view = projection * view
+        var mvp = projection_view * model
         
         let commandBuffer = commandQueue.makeCommandBuffer()!
         let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: pass)!
         encoder.setRenderPipelineState(renderPSO)
         encoder.setDepthStencilState(depthState)
         
-
-        // bind mvp-matrix to slot 1 once only
-        encoder.setVertexBytes(
-            &mvp,
-            length: MemoryLayout<matrix_float4x4>.stride,
-            index: 1
-        )
-            
+        
         encoder.setVertexBuffer(vertexBuffer_graph, offset: 0, index: 0)
+        encoder.setVertexBytes(&mvp, length: 4 * 4 * 4, index: 1)
         encoder.drawIndexedPrimitives(
             type: .triangle,
             indexCount: indexBuffer_graph.length / 4,
@@ -384,6 +379,7 @@ class Renderer: NSObject, MTKViewDelegate {
         )
         
         encoder.setVertexBuffer(vertexBuffer_grid, offset: 0, index: 0)
+        encoder.setVertexBytes(&mvp, length: 4 * 4 * 4, index: 1)
         encoder.drawIndexedPrimitives(
             type: .triangle,
             indexCount: indexBuffer_grid.length / 4,
@@ -392,9 +388,15 @@ class Renderer: NSObject, MTKViewDelegate {
             indexBufferOffset: 0,
         )
         
-        axes.forEach { $0.draw(encoder) }
+        for l in axes {
+            l.encode(encoder: encoder, projection_view: projection_view)
+        }
+        for l in grid_lines {
+            l.encode(encoder: encoder, projection_view: projection_view)
+        }
         
         encoder.setVertexBuffer(vertexBuffer_x_z_plane, offset: 0, index: 0)
+        encoder.setVertexBytes(&mvp, length: 4 * 4 * 4, index: 1)
         encoder.drawIndexedPrimitives(
             type: .triangle,
             indexCount: 6,

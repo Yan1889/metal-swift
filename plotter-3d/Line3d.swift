@@ -8,11 +8,6 @@
 import Metal
 import simd
 
-struct Vertex {
-    let pos: SIMD4<Float>
-    let col: SIMD4<Float>
-}
-
 class Line3d {
     private let vertexBuffer: MTLBuffer
     private let indexBuffer: MTLBuffer
@@ -65,8 +60,11 @@ class Line3d {
         indexBuffer = device.makeBuffer(bytes: indices, length: 4 * indices.count)!
     }
     
-    func draw(_ encoder: MTLRenderCommandEncoder) {
+    func encode(encoder: MTLRenderCommandEncoder, projection_view: simd_float4x4) {
+        var mvp = projection_view
+        
         encoder.setVertexBuffer(vertexBuffer, offset: 0, index: 0)
+        encoder.setVertexBytes(&mvp, length: 4 * 4 * 4, index: 1)
         encoder.drawIndexedPrimitives(
             type: .triangle,
             indexCount: n * 6, // each quad has 2 triangles => 6 vertices
