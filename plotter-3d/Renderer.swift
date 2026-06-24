@@ -38,6 +38,7 @@ class Renderer: NSObject, MTKViewDelegate {
     private var computePSO_reduceArray: MTLComputePipelineState!
     private var computePSO_colorVertices: MTLComputePipelineState!
     private var computePSO_grid: MTLComputePipelineState!
+    private var computePSO_fun: MTLComputePipelineState!
     
     private var axes: [Line3d] = []
     private var grid_lines: [Line3d] = []
@@ -46,7 +47,7 @@ class Renderer: NSObject, MTKViewDelegate {
     private var previousPushSettings: PushSettings
     
     private var ball: Ball3d!
-    private var ball_vel: SIMD4<Float>!
+    private var ball_vel: SIMD2<Float>!
     
     // helpers
     private var pullSets: PullSettings { settings.pull.wrappedValue }
@@ -148,10 +149,12 @@ class Renderer: NSObject, MTKViewDelegate {
             return false
         }
         
+        let fun_f    = library.makeFunction(name: "f"           )!
         let fun_mesh = library.makeFunction(name: "generateMesh")!
         let fun_grid = library.makeFunction(name: "generateGrid")!
         computePSO_vertices = try! device.makeComputePipelineState(function: fun_mesh)
         computePSO_grid = try! device.makeComputePipelineState(function: fun_grid)
+        computePSO_fun = try! device.makeComputePipelineState(function: fun_f)
         
         setupBuffers_Graph()
         
@@ -324,13 +327,50 @@ class Renderer: NSObject, MTKViewDelegate {
     
     func setupBall() {
         ball = Ball3d(
-            radius: 0.1,
-            pos: [0.5, 2, 0.5, 1],
+            radius: 0.05,
+            pos: [0.5, 0, 0.5, 1],
             color: [0, 0, 0, 1],
             resolution: 16,
             device: device
         )
-        ball_vel = [0, 0, 0, 0]
+        ball_vel = [0, 0]
+    }
+    
+    func updateBall() {
+        let resultBuffer = device.makeBuffer(length: 4 * 4)!
+        
+        let commandBuffer = commandQueue.makeCommandBuffer()!
+        let encoder = commandBuffer.makeComputeCommandEncoder()!
+        encoder.setComputePipelineState(computePSO_fun)
+        encoder.setBytes(&ball.pos, length: 4 * 4, index: 0)
+        encoder.setBuffer(resultBuffer, offset: 0, index: 1)
+        encoder.dispatchThreads(MTLSize(width: 1, height: 1, depth: 1), threadsPerThreadgroup: MTLSize(width: 1, height: 1, depth: 1))
+        encoder.endEncoding()
+        commandBuffer.commit()
+        commandBuffer.waitUntilCompleted()
+        
+        let result = resultBuffer.contents().assumingMemoryBound(to: SIMD3<Float>.self)[0]
+        
+        let y = result[0]
+        let gradient = SIMD2<Float>(result[1], result[2])
+        
+        // update velocity
+        ball_vel -= gradient * 0.016
+        
+        // update position
+        ball.pos.y = y
+        ball.pos.x += ball_vel[0] * 0.016
+        ball.pos.z += ball_vel[1] * 0.016
+        
+        // bounce of edges
+        if abs(ball.pos.x) > 1 {
+            ball.pos.x = sign(ball.pos.x)
+            ball_vel[0] *= -0.8
+        }
+        if abs(ball.pos.z) > 1 {
+            ball.pos.z = sign(ball.pos.z)
+            ball_vel[1] *= -0.8
+        }
     }
     
     func draw(in view: MTKView) {
@@ -346,8 +386,7 @@ class Renderer: NSObject, MTKViewDelegate {
             settings.pull.compiled.wrappedValue = updateMeshPipeline()
         }
         
-        ball.pos += ball_vel
-        ball_vel += [0, -0.001, 0, 0]
+        updateBall()
         
         pass.depthAttachment.texture = depthTexture
         pass.depthAttachment.loadAction = .clear

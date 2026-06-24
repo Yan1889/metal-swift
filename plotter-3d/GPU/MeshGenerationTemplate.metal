@@ -24,6 +24,18 @@ float function_to_graph(float x, float z) {
     // ^ 'default function' place holder
 }
 
+#define H (1e-5)
+
+kernel void f(constant float4 &inputs [[buffer(0)]],
+              device float4 &result [[buffer(1)]]) {
+    float y0 = function_to_graph(inputs[0]    , inputs[2]);
+    float y1 = function_to_graph(inputs[0] + H, inputs[2]);
+    float y2 = function_to_graph(inputs[0]    , inputs[2] + H);
+    result[0] = y0;
+    result[1] = (y1 - y0) / H;
+    result[2] = (y2 - y0) / H;
+}
+
 kernel void generateMesh(constant int    &resolution [[buffer(0)]],
                          device VertexIn *vertices   [[buffer(1)]],
                          device uint     *indices    [[buffer(2)]],
