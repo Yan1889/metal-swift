@@ -8,7 +8,7 @@
 import Metal
 import simd
 
-class Ball3d {
+class Ball3d: DrawableObject {
     private let vertexBuffer: MTLBuffer
     private let indexBuffer: MTLBuffer
     

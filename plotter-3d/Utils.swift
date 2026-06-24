@@ -6,6 +6,11 @@
 //
 
 import simd
+import Metal
+
+public protocol DrawableObject {
+    func encode(encoder: MTLRenderCommandEncoder, projection_view: simd_float4x4)
+}
 
 public let quad_indices: [[UInt32]] = [
     // triangle #1

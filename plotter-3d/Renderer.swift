@@ -40,8 +40,7 @@ class Renderer: NSObject, MTKViewDelegate {
     private var computePSO_grid: MTLComputePipelineState!
     private var computePSO_fun: MTLComputePipelineState!
     
-    private var axes: [Line3d] = []
-    private var grid_lines: [Line3d] = []
+    private var drawableObjects: [DrawableObject] = []
     
     private var settings: Binding<Settings>
     private var previousPushSettings: PushSettings
@@ -68,7 +67,6 @@ class Renderer: NSObject, MTKViewDelegate {
         setupComputePipeline()
         setupRenderPipeline()
         setupBuffers()
-        setupBall()
         
         mtkView(view, drawableSizeWillChange: view.drawableSize)
         
@@ -128,6 +126,9 @@ class Renderer: NSObject, MTKViewDelegate {
     }
     
     func setupBuffers() {
+        setupBall()
+        drawableObjects = [ball]
+        
         setupAxes()
         setup_x_z_plane_grid()
         setupBuffer_x_z_plane()
@@ -275,7 +276,7 @@ class Renderer: NSObject, MTKViewDelegate {
     }
     
     func setupAxes() {
-        axes = [
+        drawableObjects += [
             Line3d(
                 start: [-1.5, 0, 0],
                 end: [1.5, 0, 0],
@@ -313,7 +314,7 @@ class Renderer: NSObject, MTKViewDelegate {
             ]
             
             for (start, end) in arr {
-                grid_lines.append(Line3d(
+                drawableObjects.append(Line3d(
                     start: start,
                     end: end,
                     thickness: 0.003,
@@ -444,14 +445,9 @@ class Renderer: NSObject, MTKViewDelegate {
             indexBufferOffset: 0,
         )
         
-        for l in axes {
-            l.encode(encoder: encoder, projection_view: projection_view)
+        for o in drawableObjects {
+            o.encode(encoder: encoder, projection_view: projection_view)
         }
-        for l in grid_lines {
-            l.encode(encoder: encoder, projection_view: projection_view)
-        }
-        
-        ball.encode(encoder: encoder, projection_view: projection_view)
         
         encoder.setVertexBuffer(vertexBuffer_x_z_plane, offset: 0, index: 0)
         encoder.setVertexBytes(&mvp, length: 4 * 4 * 4, index: 1)
