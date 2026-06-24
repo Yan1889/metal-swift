@@ -7,6 +7,7 @@
 
 import Foundation
 import MetalKit
+import SwiftUI
 
 import simd
 
@@ -38,11 +39,17 @@ class Renderer: NSObject, MTKViewDelegate {
     
     private var axes: [Line3d] = []
     
-    private var settings: Settings
+    var settings: Binding<Settings>
+    var previousPushSettings: PushSettings
     
-    init(view: MetalMtkView, settings: Settings) {
+    // helpers
+    var pullSets: PullSettings { settings.pull.wrappedValue }
+    var pushSets: PushSettings { settings.push.wrappedValue }
+    
+    init(view: MetalMtkView, settings: Binding<Settings>) {
         self.view = view
         self.settings = settings
+        self.previousPushSettings = settings.push.wrappedValue
         
         device = MTLCreateSystemDefaultDevice()!
         lib = device.makeDefaultLibrary()!
@@ -185,21 +192,10 @@ class Renderer: NSObject, MTKViewDelegate {
         setupAxes()
         setup_x_z_plane_grid()
         setupBuffer_x_z_plane()
-        updateMeshPipeline()
+        _ = updateMeshPipeline()
     }
     
-    func updateSettings(_ new_settings: Settings) {
-        if settings.push == new_settings.push {
-            settings.pull = new_settings.pull
-            return
-        }
-        
-        settings = new_settings
-        updateMeshPipeline()
-    }
-    
-    /// the pipeline only gets compiled newly if the argument is `nil` or different from `self.fun_str`
-    func updateMeshPipeline() {
+    func updateMeshPipeline() -> Bool {
         let sourceURL: URL = Bundle.main.url(
             forResource: "MeshGenerationTemplate",
             withExtension: "metal"
@@ -207,11 +203,11 @@ class Renderer: NSObject, MTKViewDelegate {
         
         var source = try! String(contentsOf: sourceURL, encoding: .utf8)
         
-        source.replace("// __BODY__", with: "return \(settings.push.fun);")
+        source.replace("// __BODY__", with: "return \(pushSets.fun);")
         
         guard let library = try? device.makeLibrary(source: source, options: nil) else {
             // malformed function expression from user could lead to syntax error etc.
-            return
+            return false
         }
         
         let fun_mesh = library.makeFunction(name: "generateMesh")!
@@ -220,6 +216,8 @@ class Renderer: NSObject, MTKViewDelegate {
         computePSO_grid = try! device.makeComputePipelineState(function: fun_grid)
         
         setupBuffers_Graph()
+        
+        return true
     }
     
     func setupBuffers_Graph() {
@@ -227,25 +225,25 @@ class Renderer: NSObject, MTKViewDelegate {
         let start = clock.now
         
         // graph mesh
-        let vertex_count_graph: Int = settings.push.resolution_graph * settings.push.resolution_graph
-        let quad_count_graph: Int = (settings.push.resolution_graph - 1) * (settings.push.resolution_graph - 1)
+        let vertex_count_graph: Int = pushSets.resolution_graph * pushSets.resolution_graph
+        let quad_count_graph: Int = (pushSets.resolution_graph - 1) * (pushSets.resolution_graph - 1)
         
         // grid mesh
-        let vertex_count_grid: Int = 4 * settings.push.resolution_grid_lines * settings.push.resolution_grid_segments * 2
-        let quad_count_grid: Int = 2 * settings.push.resolution_grid_lines * settings.push.resolution_grid_segments
+        let vertex_count_grid: Int = 4 * pushSets.resolution_grid_lines * pushSets.resolution_grid_segments * 2
+        let quad_count_grid: Int = 2 * pushSets.resolution_grid_lines * pushSets.resolution_grid_segments
         
         // variables to pass to shaders
-        var resolution_graph_int32 = Int32(settings.push.resolution_graph)
-        var grid_line_count_int32 = Int32(settings.push.resolution_grid_lines)
-        var grid_segment_count_int32 = Int32(settings.push.resolution_grid_segments)
+        var resolution_graph_int32 = Int32(pushSets.resolution_graph)
+        var grid_line_count_int32 = Int32(pushSets.resolution_grid_lines)
+        var grid_segment_count_int32 = Int32(pushSets.resolution_grid_segments)
         
         // threads per group and threads per grid
         let max_threads = computePSO_vertices.threadExecutionWidth
         let max_threads_sqrt = Int(Float(max_threads).squareRoot())
         let threads_per_group_1d   = MTLSize(width: max_threads           , height: 1                       , depth: 1)
         let threads_per_group_2d   = MTLSize(width: max_threads_sqrt      , height: max_threads_sqrt        , depth: 1)
-        let threads_per_grid_graph = MTLSize(width: settings.push.resolution_graph      , height: settings.push.resolution_graph        , depth: 1)
-        let threads_per_grid_grid  = MTLSize(width: settings.push.resolution_grid_lines , height: settings.push.resolution_grid_segments, depth: 2)
+        let threads_per_grid_graph = MTLSize(width: pushSets.resolution_graph      , height: pushSets.resolution_graph        , depth: 1)
+        let threads_per_grid_grid  = MTLSize(width: pushSets.resolution_grid_lines , height: pushSets.resolution_grid_segments, depth: 2)
         
         let minMaxBufA = device.makeBuffer(length: 2 * 4 * vertex_count_graph)!
         let minMaxBufB = device.makeBuffer(length: 2 * 4 * vertex_count_graph)!
@@ -276,7 +274,7 @@ class Renderer: NSObject, MTKViewDelegate {
         encoder.setComputePipelineState(computePSO_grid)
         encoder.setBytes(&grid_line_count_int32,    length: 4, index: 0)
         encoder.setBytes(&grid_segment_count_int32, length: 4, index: 1)
-        encoder.setBytes(&settings.push.grid_thickness,  length: 4, index: 2)
+        encoder.setBytes(&settings.push.grid_thickness.wrappedValue,  length: 4, index: 2)
         encoder.setBuffer(vertexBuffer_grid, offset: 0, index: 3)
         encoder.setBuffer(indexBuffer_grid,  offset: 0, index: 4)
         encoder.dispatchThreads(threads_per_grid_grid, threadsPerThreadgroup: threads_per_group_2d)
@@ -407,6 +405,11 @@ class Renderer: NSObject, MTKViewDelegate {
             return
         }
         
+        if previousPushSettings != pushSets {
+            previousPushSettings = pushSets
+            settings.pull.compiled.wrappedValue = updateMeshPipeline()
+        }
+        
         pass.depthAttachment.texture = depthTexture
         pass.depthAttachment.loadAction = .clear
         pass.depthAttachment.storeAction = .dontCare
@@ -416,9 +419,9 @@ class Renderer: NSObject, MTKViewDelegate {
         pass.colorAttachments[0].storeAction = .store
         
         let cam_pos = SIMD3<Float>(
-            settings.pull.cam_dist * cos(settings.pull.cam_pitch) * sin(settings.pull.cam_yaw),
-            settings.pull.cam_dist * sin(settings.pull.cam_pitch),
-            settings.pull.cam_dist * cos(settings.pull.cam_pitch) * cos(settings.pull.cam_yaw),
+            pullSets.cam_dist * cos(pullSets.cam_pitch) * sin(pullSets.cam_yaw),
+            pullSets.cam_dist * sin(pullSets.cam_pitch),
+            pullSets.cam_dist * cos(pullSets.cam_pitch) * cos(pullSets.cam_yaw),
         )
         
         let model = matrix_identity_float4x4
@@ -450,7 +453,7 @@ class Renderer: NSObject, MTKViewDelegate {
         )
             
         encoder.setVertexBuffer(
-            settings.pull.smoothGradient ? vertexBuffer_graphContinuous : vertexBuffer_graphDiscrete,
+            pullSets.smoothGradient ? vertexBuffer_graphContinuous : vertexBuffer_graphDiscrete,
             offset: 0,
             index: 0,
         )

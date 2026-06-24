@@ -30,22 +30,13 @@ struct SettingsPanel: View {
             HStack {
                 Text("f(x, z) = ")
                 TextField("type an expression", text: $settings.push.fun)
-                
-                
-                /*
-                Toggle(
-                    "custom:",
-                    isOn: Binding(
-                        get: { getIsCustomColor() },
-                        set: { setIsCustomColor($0) }
-                    )
-                )
-                .toggleStyle(.switch)
-                
-                ColorPicker("my picker", selection: $color)
-                    .frame(width: 30)
-                    .opacity(.Custom(_) ~= settings.push.color ? 0 : 1)
-                */
+                if settings.pull.compiled {
+                    Label("", systemImage: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                } else {
+                    Label("", systemImage: "xmark.circle.fill")
+                        .foregroundStyle(.red)
+                }
             }
             
             Spacer()

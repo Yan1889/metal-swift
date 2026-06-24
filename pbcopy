@@ -1,0 +1,207 @@
+diff --git a/plotter-3d/GPU/MeshGenerationTemplate.metal b/plotter-3d/GPU/MeshGenerationTemplate.metal
+index 7d2ae3d..d560239 100644
+--- a/plotter-3d/GPU/MeshGenerationTemplate.metal
++++ b/plotter-3d/GPU/MeshGenerationTemplate.metal
+@@ -24,10 +24,11 @@ float function_to_graph(float x, float z) {
+     // ^ 'default function' place holder
+ }
+ 
+-kernel void generateMesh(constant int    &resolution [[buffer(0)]],
+-                         device VertexIn *vertices   [[buffer(1)]],
+-                         device uint     *indices    [[buffer(2)]],
+-                         device float2   *min_max    [[buffer(3)]],
++kernel void generateMesh(constant float  &input_range   [[buffer(0)]],
++                         constant int    &resolution    [[buffer(1)]],
++                         device VertexIn *vertices      [[buffer(2)]],
++                         device uint     *indices       [[buffer(3)]],
++                         device float2   *min_max       [[buffer(4)]],
+                          uint2 id [[thread_position_in_grid]]) {
+     // 'indices' of this vertex
+     int i = id.y;
+@@ -40,6 +41,12 @@ kernel void generateMesh(constant int    &resolution [[buffer(0)]],
+     // coordinate for this vertex
+     float x = 2.0 * id.x / (resolution - 1) - 1.0;
+     float z = 2.0 * id.y / (resolution - 1) - 1.0;
++    
++    // x, z are in range [-1; 1] now
++    x *= input_range;
++    z *= input_range;
++
++    
+     float y = function_to_graph(x, z);
+     v.pos = float4(x, y, z, 1.0);
+     min_max[idx] = float2(y, y);
+@@ -57,11 +64,12 @@ kernel void generateMesh(constant int    &resolution [[buffer(0)]],
+         indices[startIdx + k] = (i + quad_indices[k][0]) * resolution + (j + quad_indices[k][1]);
+     }
+ }
+-kernel void generateGrid(constant int      &line_count     [[buffer(0)]],
+-                         constant int      &segment_count  [[buffer(1)]],
+-                         constant float    &line_width     [[buffer(2)]],
+-                         device   VertexIn *vertices       [[buffer(3)]],
+-                         device   uint     *indices        [[buffer(4)]],
++kernel void generateGrid(constant float    &input_range    [[buffer(0)]],
++                         constant int      &line_count     [[buffer(1)]],
++                         constant int      &segment_count  [[buffer(2)]],
++                         constant float    &line_width     [[buffer(3)]],
++                         device   VertexIn *vertices       [[buffer(4)]],
++                         device   uint     *indices        [[buffer(5)]],
+                          uint3 id [[thread_position_in_grid]]) {
+         
+     auto wrap = [segment_count](int l, int s) {
+@@ -81,9 +89,14 @@ kernel void generateGrid(constant int      &line_count     [[buffer(0)]],
+         x = 2.0 * float(line)    / float(line_count - 1)    - 1.0;
+     }
+     
++    // x, z are in range [-1; 1] now
++    x *= input_range;
++    z *= input_range;
++    
+     float y = function_to_graph(x, z);
+     
+-
++    // squish y
++    // y /= input_range;
+     
+     // 4 vertices for each thread
+     device VertexIn *vs = vertices + 2 * 4 * wrap(line, segment);
+diff --git a/plotter-3d/Renderer.swift b/plotter-3d/Renderer.swift
+index 0b05087..29619a9 100644
+--- a/plotter-3d/Renderer.swift
++++ b/plotter-3d/Renderer.swift
+@@ -198,7 +198,6 @@ class Renderer: NSObject, MTKViewDelegate {
+         updateMeshPipeline()
+     }
+     
+-    /// the pipeline only gets compiled newly if the argument is `nil` or different from `self.fun_str`
+     func updateMeshPipeline() {
+         let sourceURL: URL = Bundle.main.url(
+             forResource: "MeshGenerationTemplate",
+@@ -263,10 +262,11 @@ class Renderer: NSObject, MTKViewDelegate {
+         
+         // generate the vertices
+         encoder.setComputePipelineState(computePSO_vertices)
+-        encoder.setBytes(&resolution_graph_int32, length: 4, index: 0)
+-        encoder.setBuffer(vertexBuffer_graphContinuous, offset: 0, index: 1)
+-        encoder.setBuffer(indexBuffer_graph, offset: 0, index: 2)
+-        encoder.setBuffer(minMaxBufA, offset: 0, index: 3)
++        encoder.setBytes(&settings.push.inputRange,    length: 4, index: 0)
++        encoder.setBytes(&resolution_graph_int32, length: 4, index: 1)
++        encoder.setBuffer(vertexBuffer_graphContinuous, offset: 0, index: 2)
++        encoder.setBuffer(indexBuffer_graph, offset: 0, index: 3)
++        encoder.setBuffer(minMaxBufA, offset: 0, index: 4)
+         encoder.dispatchThreads(threads_per_grid_graph, threadsPerThreadgroup: threads_per_group_2d)
+         // discrete
+         encoder.setBuffer(vertexBuffer_graphDiscrete, offset: 0, index: 1)
+@@ -274,11 +274,12 @@ class Renderer: NSObject, MTKViewDelegate {
+         
+         // generate the grid
+         encoder.setComputePipelineState(computePSO_grid)
+-        encoder.setBytes(&grid_line_count_int32,    length: 4, index: 0)
+-        encoder.setBytes(&grid_segment_count_int32, length: 4, index: 1)
+-        encoder.setBytes(&settings.push.grid_thickness,  length: 4, index: 2)
+-        encoder.setBuffer(vertexBuffer_grid, offset: 0, index: 3)
+-        encoder.setBuffer(indexBuffer_grid,  offset: 0, index: 4)
++        encoder.setBytes(&settings.push.inputRange,    length: 4, index: 0)
++        encoder.setBytes(&grid_line_count_int32,    length: 4, index: 1)
++        encoder.setBytes(&grid_segment_count_int32, length: 4, index: 2)
++        encoder.setBytes(&settings.push.grid_thickness,  length: 4, index: 3)
++        encoder.setBuffer(vertexBuffer_grid, offset: 0, index: 4)
++        encoder.setBuffer(indexBuffer_grid,  offset: 0, index: 5)
+         encoder.dispatchThreads(threads_per_grid_grid, threadsPerThreadgroup: threads_per_group_2d)
+ 
+         // get the min and max values for y in the vertex array
+diff --git a/plotter-3d/Settings.swift b/plotter-3d/Settings.swift
+index 3611bcc..e4336a3 100644
+--- a/plotter-3d/Settings.swift
++++ b/plotter-3d/Settings.swift
+@@ -11,6 +11,7 @@ struct Settings {
+ }
+ 
+ struct PushSettings: Equatable {
++    var inputRange: Float
+     var resolution_graph: Int
+     var resolution_grid_lines: Int
+     var resolution_grid_segments: Int
+diff --git a/plotter-3d/UI/ContentView.swift b/plotter-3d/UI/ContentView.swift
+index 2d32428..13c2df2 100644
+--- a/plotter-3d/UI/ContentView.swift
++++ b/plotter-3d/UI/ContentView.swift
+@@ -13,8 +13,11 @@ struct ContentView: View {
+     
+     @State var last_point: CGPoint?
+     
++    @State var shiftPressed = false
++    
+     @State var settings = Settings(
+         push: PushSettings(
++            inputRange : 1,
+             resolution_graph: 100,
+             resolution_grid_lines: 10,
+             resolution_grid_segments: 100,
+@@ -46,7 +49,7 @@ struct ContentView: View {
+                     .frame(width: 500)
+                     .padding()
+                 
+-                MetalView(settings: $settings)
++                MetalView(settings: $settings, shiftPressed: $shiftPressed)
+                     .frame(width: 800, height: 800)
+                     .gesture(
+                         DragGesture()
+@@ -60,6 +63,13 @@ struct ContentView: View {
+                             }
+                     )
+             }
++            .onModifierKeysChanged(mask: .command) { old, new in
++                switch (old.contains(.command), new.contains(.command)) {
++                case (true, false): shiftPressed = false
++                case (false, true): shiftPressed = true
++                default: fatalError("not reachable")
++                }
++            }
+         }
+     }
+ }
+diff --git a/plotter-3d/UI/MetalMtkView.swift b/plotter-3d/UI/MetalMtkView.swift
+index b6499c6..bac72da 100644
+--- a/plotter-3d/UI/MetalMtkView.swift
++++ b/plotter-3d/UI/MetalMtkView.swift
+@@ -6,6 +6,7 @@
+ //
+ 
+ import MetalKit
++import SwiftUI
+ 
+ class MetalMtkView: MTKView {
+     var renderer: Renderer?
+diff --git a/plotter-3d/UI/MetalView.swift b/plotter-3d/UI/MetalView.swift
+index e7a7479..c989b8e 100644
+--- a/plotter-3d/UI/MetalView.swift
++++ b/plotter-3d/UI/MetalView.swift
+@@ -12,12 +12,24 @@ struct MetalView: NSViewRepresentable {
+     
+     @Binding var settings: Settings
+     
++    @Binding var shiftPressed: Bool
++    
+     func makeNSView(context: Context) -> some NSView {
+         let view = MetalMtkView()
++        
++        let r = Renderer(view: view, settings: settings)
++        context.coordinator.renderer = r
++        
+         view.callback = { x in
+-            settings.pull.cam_dist += x
++            // print(x)
++            if shiftPressed {
++                settings.push.inputRange += x
++                print(settings.push.inputRange)
++            } else {
++                settings.pull.cam_dist += x
++            }
+         }
+-        context.coordinator.renderer = Renderer(view: view, settings: settings)
++        
+         return view
+     }
+     

@@ -17,18 +17,11 @@ struct MetalView: NSViewRepresentable {
         view.callback = { x in
             settings.pull.cam_dist += x
         }
-        context.coordinator.renderer = Renderer(view: view, settings: settings)
+        context.coordinator.renderer = Renderer(view: view, settings: $settings)
         return view
     }
     
-    func updateNSView(_ nsView: NSViewType, context: Context) {
-        guard let r = context.coordinator.renderer else {
-            print("no coordinator")
-            return
-        }
-        
-        r.updateSettings(settings)
-    }
+    func updateNSView(_ nsView: NSViewType, context: Context) {}
     
     func makeCoordinator() -> Coordinator {
         Coordinator()

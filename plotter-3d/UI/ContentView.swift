@@ -15,18 +15,19 @@ struct ContentView: View {
     
     @State var settings = Settings(
         push: PushSettings(
+            color: .Continuous,
             resolution_graph: 100,
             resolution_grid_lines: 10,
             resolution_grid_segments: 100,
             grid_thickness: 0.01,
             fun: "x * x - z * z + 1",
-            color: .Continuous
         ),
         pull: PullSettings(
             cam_pitch: 0,
             cam_yaw: 0,
             cam_dist: 5,
             smoothGradient: true,
+            compiled: true,
         )
     )
     
