@@ -45,6 +45,9 @@ class Renderer: NSObject, MTKViewDelegate {
     private var settings: Binding<Settings>
     private var previousPushSettings: PushSettings
     
+    private var ball: Ball3d!
+    private var ball_vel: SIMD4<Float>!
+    
     // helpers
     private var pullSets: PullSettings { settings.pull.wrappedValue }
     private var pushSets: PushSettings { settings.push.wrappedValue }
@@ -64,6 +67,7 @@ class Renderer: NSObject, MTKViewDelegate {
         setupComputePipeline()
         setupRenderPipeline()
         setupBuffers()
+        setupBall()
         
         mtkView(view, drawableSizeWillChange: view.drawableSize)
         
@@ -318,6 +322,17 @@ class Renderer: NSObject, MTKViewDelegate {
         }
     }
     
+    func setupBall() {
+        ball = Ball3d(
+            radius: 0.1,
+            pos: [0.5, 2, 0.5, 1],
+            color: [0, 0, 0, 1],
+            resolution: 16,
+            device: device
+        )
+        ball_vel = [0, 0, 0, 0]
+    }
+    
     func draw(in view: MTKView) {
         guard let pass = view.currentRenderPassDescriptor,
               let draw = view.currentDrawable
@@ -330,6 +345,9 @@ class Renderer: NSObject, MTKViewDelegate {
             previousPushSettings = pushSets
             settings.pull.compiled.wrappedValue = updateMeshPipeline()
         }
+        
+        ball.pos += ball_vel
+        ball_vel += [0, -0.001, 0, 0]
         
         pass.depthAttachment.texture = depthTexture
         pass.depthAttachment.loadAction = .clear
@@ -394,15 +412,7 @@ class Renderer: NSObject, MTKViewDelegate {
             l.encode(encoder: encoder, projection_view: projection_view)
         }
         
-        let s = Ball3d(
-            radius: 0.3,
-            pos: SIMD4<Float>(0, 0, 0, 1),
-            color: SIMD4<Float>(0, 1, 0, 1),
-            resolution: 100,
-            device: device
-        )
-        
-        s.encode(encoder: encoder, projection_view: projection_view)
+        ball.encode(encoder: encoder, projection_view: projection_view)
         
         encoder.setVertexBuffer(vertexBuffer_x_z_plane, offset: 0, index: 0)
         encoder.setVertexBytes(&mvp, length: 4 * 4 * 4, index: 1)

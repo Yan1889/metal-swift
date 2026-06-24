@@ -12,10 +12,16 @@ class Ball3d {
     private let vertexBuffer: MTLBuffer
     private let indexBuffer: MTLBuffer
     
-    private var radius: Float
-    private var pos: SIMD4<Float>
+    public var radius: Float
+    public var pos: SIMD4<Float>
     
-    init(radius: Float, pos: SIMD4<Float>, color: SIMD4<Float>, resolution: Int, device: MTLDevice) {
+    init(
+        radius: Float,
+        pos: SIMD4<Float>,
+        color: SIMD4<Float>,
+        resolution: Int,
+        device: MTLDevice,
+    ) {
         self.radius = radius
         self.pos = pos
         
