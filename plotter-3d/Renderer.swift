@@ -10,11 +10,6 @@ import SwiftUI
 
 import simd
 
-struct Vertex {
-    let pos: SIMD4<Float>
-    let col: SIMD4<Float>
-}
-
 class Renderer: NSObject, MTKViewDelegate {
     private let view: MetalMtkView
     
@@ -45,8 +40,7 @@ class Renderer: NSObject, MTKViewDelegate {
     private var settings: Binding<Settings>
     private var previousPushSettings: PushSettings
     
-    private var ball: Ball3d!
-    private var ball_vel: SIMD3<Float>!
+    private var balls: [(ball: Ball3d, vel: SIMD3<Float>)] = []
     
     // helpers
     private var pullSets: PullSettings { settings.pull.wrappedValue }
@@ -126,8 +120,7 @@ class Renderer: NSObject, MTKViewDelegate {
     }
     
     func setupBuffers() {
-        setupBall()
-        drawableObjects = [ball]
+        setupBalls()
         
         setupAxes()
         setup_x_z_plane_grid()
@@ -326,37 +319,56 @@ class Renderer: NSObject, MTKViewDelegate {
         }
     }
     
-    func setupBall() {
-        ball = Ball3d(
-            radius: 0.05,
-            pos: [0.5, 2, 0, 1],
-            color: [0, 0, 0, 1],
-            resolution: 16,
-            device: device
-        )
-        ball_vel = [0, 0, 0]
+    func setupBalls() {
+        balls = []
+        
+        let ball_count = 64
+        for i in 0..<ball_count {
+            let angle = Float(i) / Float(ball_count) * .pi * 2
+            
+            let x: Float = sin(angle) * 0.75
+            let z: Float = cos(angle) * 0.75
+            let y: Float = 2
+            
+            let ball = Ball3d(
+                radius: 0.05,
+                pos: [x, y, z, 1],
+                color: [1, 1, 1, 1],
+                resolution: 16,
+                device: device
+            )
+            let vel = SIMD3<Float>(0, 0, 0)
+            balls.append((ball, vel))
+            drawableObjects.append(ball)
+        }
     }
     
-    func updateBall() {
-        // update velocity and position by numeric integration
-        ball_vel.y += pullSets.gravity * 0.016
-        ball.pos += SIMD4<Float>(ball_vel, 0) * 0.016
-        
-        // bounce off graph
-        let (y, m_x, m_z) = getGraphDataAtBall()
-        if ball.pos.y < y && abs(ball.pos.x) < 1 && abs(ball.pos.z) < 1 {
-            let normal = simd_normalize(SIMD3<Float>(-m_x, 1, -m_z))
+    func moveBalls() {
+        for i in balls.indices {
+            var (ball, vel) = balls[i]
             
-            // update velocity
-            ball_vel += -simd_dot(ball_vel, normal) * normal * (1 + pullSets.bounciness)
+            // update velocity and position by numeric integration
+            vel.y += pullSets.gravity * 0.016
+            ball.pos += SIMD4<Float>(vel, 0) * 0.016
             
-            // no position correction for now
-            let dy = y - ball.pos.y
-            ball.pos += dy * .init(normal, 0)
+            // bounce off graph
+            let (y, m_x, m_z) = getGraphDataAtBall(ball)
+            if ball.pos.y < y && abs(ball.pos.x) < 1 && abs(ball.pos.z) < 1 {
+                let normal = simd_normalize(SIMD3<Float>(-m_x, 1, -m_z))
+                
+                // update velocity
+                vel += -simd_dot(vel, normal) * normal * (1 + pullSets.bounciness)
+                
+                // position correction
+                let dy = y - ball.pos.y
+                ball.pos += dy * .init(normal, 0)
+            }
+            
+            balls[i] = (ball, vel)
         }
     }
         
-    func getGraphDataAtBall() -> (y: Float, m_x: Float, m_z: Float) {
+    func getGraphDataAtBall(_ ball: Ball3d) -> (y: Float, m_x: Float, m_z: Float) {
         let resultBuffer = device.makeBuffer(length: 16)!
         let singleThreadSize = MTLSize(width: 1, height: 1, depth: 1)
         
@@ -393,7 +405,7 @@ class Renderer: NSObject, MTKViewDelegate {
             settings.pull.compiled.wrappedValue = updateMeshPipeline()
         }
         
-        updateBall()
+        moveBalls()
         
         pass.depthAttachment.texture = depthTexture
         pass.depthAttachment.loadAction = .clear

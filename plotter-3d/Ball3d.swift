@@ -44,7 +44,7 @@ class Ball3d: DrawableObject {
                 
                 let r = UInt32(resolution)
                 for arr in quad_indices {
-                    indices.append(((i + arr[0]) % r) * r + j + arr[1])
+                    indices.append(((i + arr[0]) % r) * r + (j + arr[1]) % r)
                 }
             }
         }

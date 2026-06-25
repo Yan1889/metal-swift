@@ -8,6 +8,11 @@
 import simd
 import Metal
 
+struct Vertex {
+    let pos: SIMD4<Float>
+    let col: SIMD4<Float>
+}
+
 public protocol DrawableObject {
     func encode(encoder: MTLRenderCommandEncoder, projection_view: simd_float4x4)
 }
