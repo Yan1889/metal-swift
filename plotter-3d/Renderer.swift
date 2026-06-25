@@ -46,7 +46,8 @@ class Renderer: NSObject, MTKViewDelegate {
     private var previousPushSettings: PushSettings
     
     private var ball: Ball3d!
-    private var ball_vel: SIMD2<Float>!
+    private var ball_vel: SIMD3<Float>!
+    private let gravity = SIMD3<Float>(0, -0.5, 0)
     
     // helpers
     private var pullSets: PullSettings { settings.pull.wrappedValue }
@@ -329,41 +330,20 @@ class Renderer: NSObject, MTKViewDelegate {
     func setupBall() {
         ball = Ball3d(
             radius: 0.05,
-            pos: [0.5, 0, 0.5, 1],
+            pos: [0.5, 2, 0.5, 1],
             color: [0, 0, 0, 1],
             resolution: 16,
             device: device
         )
-        ball_vel = [0, 0]
+        ball_vel = .zero
     }
     
     func updateBall() {
-        let resultBuffer = device.makeBuffer(length: 4 * 4)!
+        // update velocity and position by numeric integration
+        ball_vel += gravity * 0.016
+        ball.pos += SIMD4<Float>(ball_vel, 0) * 0.016
         
-        let commandBuffer = commandQueue.makeCommandBuffer()!
-        let encoder = commandBuffer.makeComputeCommandEncoder()!
-        encoder.setComputePipelineState(computePSO_fun)
-        encoder.setBytes(&ball.pos, length: 4 * 4, index: 0)
-        encoder.setBuffer(resultBuffer, offset: 0, index: 1)
-        encoder.dispatchThreads(MTLSize(width: 1, height: 1, depth: 1), threadsPerThreadgroup: MTLSize(width: 1, height: 1, depth: 1))
-        encoder.endEncoding()
-        commandBuffer.commit()
-        commandBuffer.waitUntilCompleted()
-        
-        let result = resultBuffer.contents().assumingMemoryBound(to: SIMD3<Float>.self)[0]
-        
-        let y = result[0]
-        let gradient = SIMD2<Float>(result[1], result[2])
-        
-        // update velocity
-        ball_vel -= gradient * 0.016
-        
-        // update position
-        ball.pos.y = y
-        ball.pos.x += ball_vel[0] * 0.016
-        ball.pos.z += ball_vel[1] * 0.016
-        
-        // bounce of edges
+        // bounce off edges
         if abs(ball.pos.x) > 1 {
             ball.pos.x = sign(ball.pos.x)
             ball_vel[0] *= -0.8
@@ -372,6 +352,44 @@ class Renderer: NSObject, MTKViewDelegate {
             ball.pos.z = sign(ball.pos.z)
             ball_vel[1] *= -0.8
         }
+        
+        // bounce off graph
+        let (y, m_x, m_z) = getGraphDataAtBall()
+        if ball.pos.y < y {
+            let v_x = SIMD3<Float>(1, m_x, 0)
+            let v_z = SIMD3<Float>(0, m_z, 1)
+            let normal = simd_normalize(simd_cross(v_x, v_z))
+            
+            // update velocity
+            ball_vel -= 2 * simd_dot(ball_vel, normal) * normal
+            
+            // clamp ball to graph
+            ball.pos.y = y
+        }
+    }
+        
+    func getGraphDataAtBall() -> (y: Float, m_x: Float, m_z: Float) {
+        let resultBuffer = device.makeBuffer(length: 16)!
+        let singleThreadSize = MTLSize(width: 1, height: 1, depth: 1)
+        
+        let commandBuffer = commandQueue.makeCommandBuffer()!
+        let encoder = commandBuffer.makeComputeCommandEncoder()!
+        
+        encoder.setComputePipelineState(computePSO_fun)
+        encoder.setBytes(&ball.pos, length: 16, index: 0)
+        encoder.setBuffer(resultBuffer, offset: 0, index: 1)
+        encoder.dispatchThreads(singleThreadSize, threadsPerThreadgroup: singleThreadSize)
+        
+        encoder.endEncoding()
+        commandBuffer.commit()
+        commandBuffer.waitUntilCompleted()
+        
+        let result = resultBuffer.contents().assumingMemoryBound(to: SIMD4<Float>.self)[0]
+        return (
+            y: result[0],
+            m_x: result[1],
+            m_z: result[2],
+        )
     }
     
     func draw(in view: MTKView) {
