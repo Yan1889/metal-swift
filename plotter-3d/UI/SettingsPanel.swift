@@ -44,6 +44,28 @@ struct SettingsPanel: View {
             }
             
             HStack {
+                Text("Gravity:")
+                Slider(
+                    value: Binding(
+                        get: { -settings.pull.gravity },
+                        set: { settings.pull.gravity = -$0 }
+                    ),
+                    in: 0...2
+                )
+                TextField(
+                    "",
+                    value:  Binding(
+                        get: { -settings.pull.gravity },
+                        set: { settings.pull.gravity = -$0 }
+                    ),
+                    format: .number.precision(.fractionLength(2))
+                )
+                .fixedSize()
+            }
+            
+            Spacer()
+            
+            HStack {
                 Text("Graph Resolution:")
                 Slider(
                     value: Binding(

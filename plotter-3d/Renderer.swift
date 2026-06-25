@@ -47,7 +47,6 @@ class Renderer: NSObject, MTKViewDelegate {
     
     private var ball: Ball3d!
     private var ball_vel: SIMD3<Float>!
-    private let gravity = SIMD3<Float>(0, -0.5, 0)
     
     // helpers
     private var pullSets: PullSettings { settings.pull.wrappedValue }
@@ -330,30 +329,18 @@ class Renderer: NSObject, MTKViewDelegate {
     func setupBall() {
         ball = Ball3d(
             radius: 0.05,
-            pos: [0.5, 2, 0.5, 1],
+            pos: [0.5, 3, 0, 1],
             color: [0, 0, 0, 1],
             resolution: 16,
             device: device
         )
-        ball_vel = .zero
+        ball_vel = [0, 0, 0]
     }
     
     func updateBall() {
         // update velocity and position by numeric integration
-        ball_vel += gravity * 0.016
+        ball_vel.y += pullSets.gravity * 0.016
         ball.pos += SIMD4<Float>(ball_vel, 0) * 0.016
-        
-        // bounce off edges
-        /*
-        if abs(ball.pos.x) > 1 {
-            ball.pos.x = sign(ball.pos.x)
-            ball_vel[0] *= -pullSets.bounciness
-        }
-        if abs(ball.pos.z) > 1 {
-            ball.pos.z = sign(ball.pos.z)
-            ball_vel[1] *= -pullSets.bounciness
-        }
-        */
         
         // bounce off graph
         let (y, m_x, m_z) = getGraphDataAtBall()
@@ -363,8 +350,7 @@ class Renderer: NSObject, MTKViewDelegate {
             // update velocity
             ball_vel += -simd_dot(ball_vel, normal) * normal * (1 + pullSets.bounciness)
             
-            // clamp ball to graph
-            ball.pos.y = y
+            // no position correction for now
         }
     }
         
