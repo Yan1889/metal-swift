@@ -44,7 +44,7 @@ struct SettingsPanel: View {
                     TextField(
                         "",
                         value: $settings.pull.bounciness,
-                        format: .number
+                        format: .number.precision(.fractionLength(2))
                     )
                     .fixedSize()
                 }
@@ -57,7 +57,7 @@ struct SettingsPanel: View {
                             get: { -settings.pull.gravity },
                             set: { settings.pull.gravity = -$0 }
                         ),
-                        in: 0...2
+                        in: 0...5
                     )
                     TextField(
                         "",

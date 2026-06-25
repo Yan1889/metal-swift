@@ -27,18 +27,15 @@ struct ContentView: View {
             cam_dist: 5,
             compiled: true,
             bounciness: 1,
-            gravity: -1,
+            gravity: -2,
         )
     )
     
-    var switchText: String {
-        isBlackHole ? "function plotter" : "black hole simulation"
-    }
-    
     var body: some View {
-        Button("Switch to \(switchText)") {
+        Button(isBlackHole ? "Switch to function plotter" : "Switch to black hole simulation") {
             isBlackHole.toggle()
         }
+        
         if isBlackHole {
             BlackHole()
         } else {
