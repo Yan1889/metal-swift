@@ -30,6 +30,20 @@ struct SettingsPanel: View {
             Spacer()
             
             HStack {
+                Text("Bounciness:")
+                Slider(
+                    value: $settings.pull.bounciness,
+                    in: 0.1...1
+                )
+                TextField(
+                    "",
+                    value: $settings.pull.bounciness,
+                    format: .number
+                )
+                .fixedSize()
+            }
+            
+            HStack {
                 Text("Graph Resolution:")
                 Slider(
                     value: Binding(
@@ -43,7 +57,7 @@ struct SettingsPanel: View {
                     value: $settings.push.resolution_graph,
                     format: .number
                 )
-                    .fixedSize()
+                .fixedSize()
             }
             
             HStack {
@@ -60,7 +74,7 @@ struct SettingsPanel: View {
                     value: $settings.push.resolution_grid_lines,
                     format: .number
                 )
-                    .fixedSize()
+                .fixedSize()
             }
             
             HStack {
@@ -77,7 +91,7 @@ struct SettingsPanel: View {
                     value: $settings.push.resolution_grid_segments,
                     format: .number
                 )
-                    .fixedSize()
+                .fixedSize()
             }
             
             HStack {
@@ -91,15 +105,8 @@ struct SettingsPanel: View {
                     value: $settings.push.grid_thickness,
                     format: .number.precision(.fractionLength(3))
                 )
-                    .fixedSize()
+                .fixedSize()
             }
         }
-    }
-    
-    func floatBinding(i: Binding<Int>) -> Binding<Float> {
-        Binding(
-            get: { Float(i.wrappedValue) },
-            set: { i.wrappedValue = Int($0) }
-        )
     }
 }

@@ -15,6 +15,7 @@ struct PullSettings {
     var cam_yaw: Float
     var cam_dist: Float
     var compiled: Bool
+    var bounciness: Float
 }
 
 struct PushSettings: Equatable {

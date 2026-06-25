@@ -19,13 +19,14 @@ struct ContentView: View {
             resolution_grid_lines: 10,
             resolution_grid_segments: 100,
             grid_thickness: 0.01,
-            fun: "x * x + z * z + 1",
+            fun: "x * x + x + 1",
         ),
         pull: PullSettings(
             cam_pitch: 0,
             cam_yaw: 0,
             cam_dist: 5,
             compiled: true,
+            bounciness: 1,
         )
     )
     

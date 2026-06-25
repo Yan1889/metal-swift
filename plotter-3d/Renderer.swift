@@ -344,24 +344,24 @@ class Renderer: NSObject, MTKViewDelegate {
         ball.pos += SIMD4<Float>(ball_vel, 0) * 0.016
         
         // bounce off edges
+        /*
         if abs(ball.pos.x) > 1 {
             ball.pos.x = sign(ball.pos.x)
-            ball_vel[0] *= -0.8
+            ball_vel[0] *= -pullSets.bounciness
         }
         if abs(ball.pos.z) > 1 {
             ball.pos.z = sign(ball.pos.z)
-            ball_vel[1] *= -0.8
+            ball_vel[1] *= -pullSets.bounciness
         }
+        */
         
         // bounce off graph
         let (y, m_x, m_z) = getGraphDataAtBall()
-        if ball.pos.y < y {
-            let v_x = SIMD3<Float>(1, m_x, 0)
-            let v_z = SIMD3<Float>(0, m_z, 1)
-            let normal = simd_normalize(simd_cross(v_x, v_z))
+        if ball.pos.y < y && abs(ball.pos.x) < 1 && abs(ball.pos.z) < 1 {
+            let normal = simd_normalize(SIMD3<Float>(-m_x, 1, -m_z))
             
             // update velocity
-            ball_vel -= 2 * simd_dot(ball_vel, normal) * normal
+            ball_vel += -simd_dot(ball_vel, normal) * normal * (1 + pullSets.bounciness)
             
             // clamp ball to graph
             ball.pos.y = y
