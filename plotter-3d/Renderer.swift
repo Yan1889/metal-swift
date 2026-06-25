@@ -329,7 +329,7 @@ class Renderer: NSObject, MTKViewDelegate {
     func setupBall() {
         ball = Ball3d(
             radius: 0.05,
-            pos: [0.5, 3, 0, 1],
+            pos: [0.5, 2, 0, 1],
             color: [0, 0, 0, 1],
             resolution: 16,
             device: device
@@ -351,6 +351,8 @@ class Renderer: NSObject, MTKViewDelegate {
             ball_vel += -simd_dot(ball_vel, normal) * normal * (1 + pullSets.bounciness)
             
             // no position correction for now
+            let dy = y - ball.pos.y
+            ball.pos += dy * .init(normal, 0)
         }
     }
         

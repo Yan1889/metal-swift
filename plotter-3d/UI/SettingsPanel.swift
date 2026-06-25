@@ -13,121 +13,130 @@ struct SettingsPanel: View {
     
     @Binding var settings: Settings
     
+    @State var functionExpanded = true
+    @State var physicsExpanded = true
+    @State var graphExpanded = true
+    
     var body: some View {
         VStack {
-            HStack {
-                Text("f(x, z) = ")
-                TextField("type an expression", text: $settings.push.fun)
-                if settings.pull.compiled {
-                    Label("", systemImage: "checkmark.circle.fill")
-                        .foregroundStyle(.green)
-                } else {
-                    Label("", systemImage: "xmark.circle.fill")
-                        .foregroundStyle(.red)
+            DisclosureGroup("Function", isExpanded: $functionExpanded) {
+                HStack {
+                    Text("f(x, z) = ")
+                    TextField("type an expression", text: $settings.push.fun)
+                    if settings.pull.compiled {
+                        Label("", systemImage: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                    } else {
+                        Label("", systemImage: "xmark.circle.fill")
+                            .foregroundStyle(.red)
+                    }
                 }
             }
             
             Spacer()
-            
-            HStack {
-                Text("Bounciness:")
-                Slider(
-                    value: $settings.pull.bounciness,
-                    in: 0.1...1
-                )
-                TextField(
-                    "",
-                    value: $settings.pull.bounciness,
-                    format: .number
-                )
-                .fixedSize()
-            }
-            
-            HStack {
-                Text("Gravity:")
-                Slider(
-                    value: Binding(
-                        get: { -settings.pull.gravity },
-                        set: { settings.pull.gravity = -$0 }
-                    ),
-                    in: 0...2
-                )
-                TextField(
-                    "",
-                    value:  Binding(
-                        get: { -settings.pull.gravity },
-                        set: { settings.pull.gravity = -$0 }
-                    ),
-                    format: .number.precision(.fractionLength(2))
-                )
-                .fixedSize()
+            DisclosureGroup("Physics", isExpanded: $physicsExpanded) {
+                HStack {
+                    Text("Bounciness:")
+                    Slider(
+                        value: $settings.pull.bounciness,
+                        in: 0.1...1
+                    )
+                    TextField(
+                        "",
+                        value: $settings.pull.bounciness,
+                        format: .number
+                    )
+                    .fixedSize()
+                }
+                
+                
+                HStack {
+                    Text("Gravity:")
+                    Slider(
+                        value: Binding(
+                            get: { -settings.pull.gravity },
+                            set: { settings.pull.gravity = -$0 }
+                        ),
+                        in: 0...2
+                    )
+                    TextField(
+                        "",
+                        value:  Binding(
+                            get: { -settings.pull.gravity },
+                            set: { settings.pull.gravity = -$0 }
+                        ),
+                        format: .number.precision(.fractionLength(2))
+                    )
+                    .fixedSize()
+                }
             }
             
             Spacer()
-            
-            HStack {
-                Text("Graph Resolution:")
-                Slider(
-                    value: Binding(
-                        get: { log(Double(settings.push.resolution_graph)) },
-                        set: { settings.push.resolution_graph = Int(exp(Double($0))) }
-                    ),
-                    in: 1...7
-                )
-                TextField(
-                    "",
-                    value: $settings.push.resolution_graph,
-                    format: .number
-                )
-                .fixedSize()
-            }
-            
-            HStack {
-                Text("Grid Line Count:")
-                Slider(
-                    value: Binding(
-                        get: { log(Double(settings.push.resolution_grid_lines)) },
-                        set: { settings.push.resolution_grid_lines = Int(exp(Double($0))) }
-                    ),
-                    in: 1...7
-                )
-                TextField(
-                    "",
-                    value: $settings.push.resolution_grid_lines,
-                    format: .number
-                )
-                .fixedSize()
-            }
-            
-            HStack {
-                Text("Grid Line Segment Count:")
-                Slider(
-                    value: Binding(
-                        get: { log(Double(settings.push.resolution_grid_segments)) },
-                        set: { settings.push.resolution_grid_segments = Int(exp(Double($0))) }
-                    ),
-                    in: 1...7
-                )
-                TextField(
-                    "",
-                    value: $settings.push.resolution_grid_segments,
-                    format: .number
-                )
-                .fixedSize()
-            }
-            
-            HStack {
-                Text("Grid Thickness:")
-                Slider(
-                    value: $settings.push.grid_thickness,
-                    in: 0...0.05
-                )
-                TextField(
-                    "",
-                    value: $settings.push.grid_thickness,
-                    format: .number.precision(.fractionLength(3))
-                )
-                .fixedSize()
+            DisclosureGroup("Graph", isExpanded: $graphExpanded) {
+                HStack {
+                    Text("Graph Resolution:")
+                    Slider(
+                        value: Binding(
+                            get: { log(Double(settings.push.resolution_graph)) },
+                            set: { settings.push.resolution_graph = Int(exp(Double($0))) }
+                        ),
+                        in: 1...7
+                    )
+                    TextField(
+                        "",
+                        value: $settings.push.resolution_graph,
+                        format: .number
+                    )
+                    .fixedSize()
+                }
+                
+                HStack {
+                    Text("Grid Line Count:")
+                    Slider(
+                        value: Binding(
+                            get: { log(Double(settings.push.resolution_grid_lines)) },
+                            set: { settings.push.resolution_grid_lines = Int(exp(Double($0))) }
+                        ),
+                        in: 1...7
+                    )
+                    TextField(
+                        "",
+                        value: $settings.push.resolution_grid_lines,
+                        format: .number
+                    )
+                    .fixedSize()
+                }
+                
+                HStack {
+                    Text("Grid Line Segment Count:")
+                    Slider(
+                        value: Binding(
+                            get: { log(Double(settings.push.resolution_grid_segments)) },
+                            set: { settings.push.resolution_grid_segments = Int(exp(Double($0))) }
+                        ),
+                        in: 1...7
+                    )
+                    TextField(
+                        "",
+                        value: $settings.push.resolution_grid_segments,
+                        format: .number
+                    )
+                    .fixedSize()
+                }
+                
+                HStack {
+                    Text("Grid Thickness:")
+                    Slider(
+                        value: $settings.push.grid_thickness,
+                        in: 0...0.05
+                    )
+                    TextField(
+                        "",
+                        value: $settings.push.grid_thickness,
+                        format: .number.precision(.fractionLength(3))
+                    )
+                    .fixedSize()
+                }
             }
         }
     }
