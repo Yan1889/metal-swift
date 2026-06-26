@@ -8,7 +8,7 @@
 import Metal
 import simd
 
-class Line3d: DrawableObject {
+class Line3d {
     private let vertexBuffer: MTLBuffer
     private let indexBuffer: MTLBuffer
     

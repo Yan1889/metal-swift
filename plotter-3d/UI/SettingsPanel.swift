@@ -23,13 +23,22 @@ struct SettingsPanel: View {
                 HStack {
                     Text("f(x, z) = ")
                     TextField("type an expression", text: $settings.push.fun)
-                    if settings.pull.compiled {
-                        Label("", systemImage: "checkmark.circle.fill")
-                            .foregroundStyle(.green)
-                    } else {
-                        Label("", systemImage: "xmark.circle.fill")
-                            .foregroundStyle(.red)
-                    }
+                    Image(systemName: settings.pull.compiled ? "checkmark.circle.fill" : "xmark.circle.fill")
+                        .foregroundStyle(settings.pull.compiled ? .green : .red)
+                        
+                }
+                Menu("Select a predefined function") {
+                    Button("Bowl") { settings.push.fun = "1 - sqrt(1 - x * x - z * z)" }
+                    Button("Vase") { settings.push.fun = "x * x + z * z" }
+                    Button("Cone") { settings.push.fun = "sqrt(x * x + z * z)" }
+                    Button("Pringles") { settings.push.fun = "x * x - z * z + 1" }
+                    Button("Wave (1d)") { settings.push.fun = "sin(x * 20) / 5 + 0.2" }
+                    Button("Wave (2d)") { settings.push.fun = "sin((x * x + z * z) * 20) / 5 + 0.2" }
+                    Button("Wave (inverted)") { settings.push.fun = "sin(x * z * 20) / 5 + 0.2" }
+                }
+                
+                Button("Reset") {
+                    settings.push.shouldReset = true
                 }
             }
             
@@ -69,6 +78,13 @@ struct SettingsPanel: View {
                     )
                     .fixedSize()
                 }
+                
+                Button {
+                    settings.pull.paused.toggle()
+                } label: {
+                    Image(systemName: settings.pull.paused ? "play.fill" : "pause.fill")
+                }
+                .fixedSize()
             }
             
             Spacer()

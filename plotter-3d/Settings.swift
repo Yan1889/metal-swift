@@ -15,6 +15,7 @@ struct PullSettings {
     var cam_yaw: Float
     var cam_dist: Float
     var compiled: Bool
+    var paused: Bool
     // physics
     var bounciness: Float
     var gravity: Float
@@ -26,6 +27,7 @@ struct PushSettings: Equatable {
     var resolution_grid_segments: Int
     var grid_thickness: Float
     var fun: String
+    var shouldReset: Bool
 }
 
 enum ColorSettings: Equatable {

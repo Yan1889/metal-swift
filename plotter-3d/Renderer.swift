@@ -19,28 +19,37 @@ class Renderer: NSObject, MTKViewDelegate {
     
     // render pipeline
     private var renderPSO: MTLRenderPipelineState!
-    private var vertexBuffer_graph: MTLBuffer!
-    private var indexBuffer_graph: MTLBuffer!
-    private var vertexBuffer_grid: MTLBuffer!
-    private var indexBuffer_grid: MTLBuffer!
+    private var renderPSO_balls: MTLRenderPipelineState!
+    
+    private var vertexBuffer_graph    : MTLBuffer!
+    private var vertexBuffer_grid     : MTLBuffer!
     private var vertexBuffer_x_z_plane: MTLBuffer!
-    private var indexBuffer_x_z_plane: MTLBuffer!
+    private var vertexBuffer_balls    : MTLBuffer!
+    private var indexBuffer_graph     : MTLBuffer!
+    private var indexBuffer_grid      : MTLBuffer!
+    private var indexBuffer_x_z_plane : MTLBuffer!
+    private var indexBuffer_balls     : MTLBuffer!
+    
+    private var ball_velocities: MTLBuffer!
+    private var ball_positions : MTLBuffer!
+    
     private var depthTexture: MTLTexture!
     private var depthState: MTLDepthStencilState!
     
     // mesh compute pipeline
-    private var computePSO_vertices: MTLComputePipelineState!
-    private var computePSO_reduceArray: MTLComputePipelineState!
+    private var computePSO_vertices     : MTLComputePipelineState!
+    private var computePSO_reduceArray  : MTLComputePipelineState!
     private var computePSO_colorVertices: MTLComputePipelineState!
-    private var computePSO_grid: MTLComputePipelineState!
-    private var computePSO_fun: MTLComputePipelineState!
-    
-    private var drawableObjects: [DrawableObject] = []
+    private var computePSO_grid         : MTLComputePipelineState!
+    private var computePSO_initBalls    : MTLComputePipelineState!
+    private var computePSO_moveBalls    : MTLComputePipelineState!
+
+    private var grid_lines_and_axes: [Line3d] = []
     
     private var settings: Binding<Settings>
     private var previousPushSettings: PushSettings
     
-    private var balls: [(ball: Ball3d, vel: SIMD3<Float>)] = []
+    private let ball_count: Int = 1_000_000
     
     // helpers
     private var pullSets: PullSettings { settings.pull.wrappedValue }
@@ -60,6 +69,7 @@ class Renderer: NSObject, MTKViewDelegate {
         setupView()
         setupComputePipeline()
         setupRenderPipeline()
+        setupRenderPipeline_balls()
         setupBuffers()
         
         mtkView(view, drawableSizeWillChange: view.drawableSize)
@@ -114,17 +124,50 @@ class Renderer: NSObject, MTKViewDelegate {
         renderPSO = try! device.makeRenderPipelineState(descriptor: pipelineDescriptor)
     }
     
+    func setupRenderPipeline_balls() {
+        let vertexDescriptor = MTLVertexDescriptor()
+        vertexDescriptor.attributes[0].bufferIndex = 0
+        vertexDescriptor.attributes[0].offset = 0
+        vertexDescriptor.attributes[0].format = .float4
+        
+        vertexDescriptor.attributes[1].bufferIndex = 0
+        vertexDescriptor.attributes[1].offset = MemoryLayout<SIMD4<Float>>.stride
+        vertexDescriptor.attributes[1].format = .float4
+        
+        vertexDescriptor.layouts[0].stride = MemoryLayout<Vertex>.stride
+        
+        let pipelineDescriptor = MTLRenderPipelineDescriptor()
+        pipelineDescriptor.vertexDescriptor = vertexDescriptor
+        pipelineDescriptor.colorAttachments[0].pixelFormat = view.colorPixelFormat
+        pipelineDescriptor.depthAttachmentPixelFormat = view.depthStencilPixelFormat
+        pipelineDescriptor.vertexFunction = lib.makeFunction(name: "ballsShader")!
+        pipelineDescriptor.fragmentFunction = lib.makeFunction(name: "fragmentShader")!
+        
+        let attachment = pipelineDescriptor.colorAttachments[0]!
+        attachment.isBlendingEnabled = true
+
+        attachment.rgbBlendOperation = .add
+        attachment.alphaBlendOperation = .add
+
+        attachment.sourceRGBBlendFactor = .sourceAlpha
+        attachment.destinationRGBBlendFactor = .oneMinusSourceAlpha
+
+        attachment.sourceAlphaBlendFactor = .one
+        attachment.destinationAlphaBlendFactor = .oneMinusSourceAlpha
+        
+        renderPSO_balls = try! device.makeRenderPipelineState(descriptor: pipelineDescriptor)
+    }
+    
     func setupComputePipeline() {
         computePSO_reduceArray = try! device.makeComputePipelineState(function: lib.makeFunction(name: "reduceArray")!)
         computePSO_colorVertices = try! device.makeComputePipelineState(function: lib.makeFunction(name: "colorVertices")!)
+        computePSO_initBalls = try! device.makeComputePipelineState(function: lib.makeFunction(name: "initBalls")!)
     }
     
     func setupBuffers() {
-        setupBalls()
-        
-        setupAxes()
-        setup_x_z_plane_grid()
         setupBuffer_x_z_plane()
+        setup_gridlines_and_axes()
+        setupBalls()
         _ = updateMeshPipeline()
     }
     
@@ -143,12 +186,12 @@ class Renderer: NSObject, MTKViewDelegate {
             return false
         }
         
-        let fun_f    = library.makeFunction(name: "f"           )!
-        let fun_mesh = library.makeFunction(name: "generateMesh")!
-        let fun_grid = library.makeFunction(name: "generateGrid")!
+        let fun_balls = library.makeFunction(name: "moveBalls")!
+        let fun_mesh  = library.makeFunction(name: "generateMesh")!
+        let fun_grid  = library.makeFunction(name: "generateGrid")!
         computePSO_vertices = try! device.makeComputePipelineState(function: fun_mesh)
         computePSO_grid = try! device.makeComputePipelineState(function: fun_grid)
-        computePSO_fun = try! device.makeComputePipelineState(function: fun_f)
+        computePSO_moveBalls = try! device.makeComputePipelineState(function: fun_balls)
         
         setupBuffers_Graph()
         
@@ -268,8 +311,8 @@ class Renderer: NSObject, MTKViewDelegate {
         )
     }
     
-    func setupAxes() {
-        drawableObjects += [
+    func setup_gridlines_and_axes() {
+        grid_lines_and_axes = [
             Line3d(
                 start: [-1.5, 0, 0],
                 end: [1.5, 0, 0],
@@ -295,9 +338,7 @@ class Renderer: NSObject, MTKViewDelegate {
                 color: [0, 0, 1, 1],
             )
         ]
-    }
-    
-    func setup_x_z_plane_grid() {
+        
         let line_count = 10
         
         for f in stride(from: Float(-1.5), through: 1.5, by: 3.0 / Float(line_count)) {
@@ -307,7 +348,7 @@ class Renderer: NSObject, MTKViewDelegate {
             ]
             
             for (start, end) in arr {
-                drawableObjects.append(Line3d(
+                grid_lines_and_axes.append(Line3d(
                     start: start,
                     end: end,
                     thickness: 0.003,
@@ -320,76 +361,56 @@ class Renderer: NSObject, MTKViewDelegate {
     }
     
     func setupBalls() {
-        balls = []
+        // create a single mesh
+        (vertexBuffer_balls, indexBuffer_balls) = makeMesh_ball(
+            radius: 0.03,
+            pos: [0, 0, 0, 1],
+            color: [1, 1, 1, 1],
+            resolution: 8,
+            device: device,
+        )
         
-        let ball_count = 64
-        for i in 0..<ball_count {
-            let angle = Float(i) / Float(ball_count) * .pi * 2
-            
-            let x: Float = sin(angle) * 0.75
-            let z: Float = cos(angle) * 0.75
-            let y: Float = 2
-            
-            let ball = Ball3d(
-                radius: 0.05,
-                pos: [x, y, z, 1],
-                color: [1, 1, 1, 1],
-                resolution: 16,
-                device: device
-            )
-            let vel = SIMD3<Float>(0, 0, 0)
-            balls.append((ball, vel))
-            drawableObjects.append(ball)
-        }
-    }
-    
-    func moveBalls() {
-        for i in balls.indices {
-            var (ball, vel) = balls[i]
-            
-            // update velocity and position by numeric integration
-            vel.y += pullSets.gravity * 0.016
-            ball.pos += SIMD4<Float>(vel, 0) * 0.016
-            
-            // bounce off graph
-            let (y, m_x, m_z) = getGraphDataAtBall(ball)
-            if ball.pos.y < y && abs(ball.pos.x) < 1 && abs(ball.pos.z) < 1 {
-                let normal = simd_normalize(SIMD3<Float>(-m_x, 1, -m_z))
-                
-                // update velocity
-                vel += -simd_dot(vel, normal) * normal * (1 + pullSets.bounciness)
-                
-                // position correction
-                let dy = y - ball.pos.y
-                ball.pos += dy * .init(normal, 0)
-            }
-            
-            balls[i] = (ball, vel)
-        }
-    }
+        // init the positions
+        ball_positions = device.makeBuffer(length: ball_count * 16)
+        ball_velocities = device.makeBuffer(length: ball_count * 16)
         
-    func getGraphDataAtBall(_ ball: Ball3d) -> (y: Float, m_x: Float, m_z: Float) {
-        let resultBuffer = device.makeBuffer(length: 16)!
-        let singleThreadSize = MTLSize(width: 1, height: 1, depth: 1)
+        var balls_side_count = Int32(round(sqrt(Float(ball_count))))
+        print(balls_side_count)
+        
+        let threads_grid = MTLSize(width: ball_count, height: 1, depth: 1)
+        let threads_per_group = MTLSize(width: computePSO_initBalls.threadExecutionWidth, height: 1, depth: 1)
         
         let commandBuffer = commandQueue.makeCommandBuffer()!
         let encoder = commandBuffer.makeComputeCommandEncoder()!
         
-        encoder.setComputePipelineState(computePSO_fun)
-        encoder.setBytes(&ball.pos, length: 16, index: 0)
-        encoder.setBuffer(resultBuffer, offset: 0, index: 1)
-        encoder.dispatchThreads(singleThreadSize, threadsPerThreadgroup: singleThreadSize)
+        encoder.setComputePipelineState(computePSO_initBalls)
+        encoder.setBytes(&balls_side_count, length: 4, index: 0)
+        encoder.setBuffer(ball_positions, offset: 0, index: 1)
+        encoder.setBuffer(ball_velocities, offset: 0, index: 2)
+        encoder.dispatchThreads(threads_grid, threadsPerThreadgroup: threads_per_group)
         
         encoder.endEncoding()
         commandBuffer.commit()
         commandBuffer.waitUntilCompleted()
+    }
+    
+    func moveBalls() {
+        let commandBuffer = commandQueue.makeCommandBuffer()!
+        let encoder = commandBuffer.makeComputeCommandEncoder()!
         
-        let result = resultBuffer.contents().assumingMemoryBound(to: SIMD4<Float>.self)[0]
-        return (
-            y: result[0],
-            m_x: result[1],
-            m_z: result[2],
-        )
+        let threads_grid = MTLSize(width: ball_count, height: 1, depth: 1)
+        let threads_per_group = MTLSize(width: computePSO_moveBalls.threadExecutionWidth, height: 1, depth: 1)
+        
+        encoder.setComputePipelineState(computePSO_moveBalls)
+        encoder.setBytes(&settings.pull.gravity.wrappedValue, length: 4, index: 0)
+        encoder.setBytes(&settings.pull.bounciness.wrappedValue, length: 4, index: 1)
+        encoder.setBuffer(ball_positions, offset: 0, index: 2)
+        encoder.setBuffer(ball_velocities, offset: 0, index: 3)
+        encoder.dispatchThreads(threads_grid, threadsPerThreadgroup: threads_per_group)
+        
+        encoder.endEncoding()
+        commandBuffer.commit()
+        commandBuffer.waitUntilCompleted()
     }
     
     func draw(in view: MTKView) {
@@ -405,7 +426,14 @@ class Renderer: NSObject, MTKViewDelegate {
             settings.pull.compiled.wrappedValue = updateMeshPipeline()
         }
         
-        moveBalls()
+        if pushSets.shouldReset {
+            setupBalls()
+            settings.push.shouldReset.wrappedValue = false
+        }
+        
+        if (!pullSets.paused) {
+            moveBalls()
+        }
         
         pass.depthAttachment.texture = depthTexture
         pass.depthAttachment.loadAction = .clear
@@ -434,7 +462,7 @@ class Renderer: NSObject, MTKViewDelegate {
             near: 0.1,
             far: 100,
         )
-        let projection_view = projection * view
+        var projection_view = projection * view
         var mvp = projection_view * model
         
         let commandBuffer = commandQueue.makeCommandBuffer()!
@@ -463,9 +491,25 @@ class Renderer: NSObject, MTKViewDelegate {
             indexBufferOffset: 0,
         )
         
-        for o in drawableObjects {
-            o.encode(encoder: encoder, projection_view: projection_view)
+        for l in grid_lines_and_axes {
+            l.encode(encoder: encoder, projection_view: projection_view)
         }
+        
+        // balls
+        encoder.setRenderPipelineState(renderPSO_balls)
+        encoder.setVertexBuffer(vertexBuffer_balls, offset: 0, index: 0)
+        encoder.setVertexBytes(&projection_view, length: 64, index: 1)
+        encoder.setVertexBuffer(ball_positions, offset: 0, index: 2)
+        encoder.drawIndexedPrimitives(
+            type: .triangle,
+            indexCount: 6 * 8 * 8,
+            indexType: .uint32,
+            indexBuffer: indexBuffer_balls,
+            indexBufferOffset: 0,
+            instanceCount: ball_count,
+        )
+        
+        encoder.setRenderPipelineState(renderPSO)
         
         encoder.setVertexBuffer(vertexBuffer_x_z_plane, offset: 0, index: 0)
         encoder.setVertexBytes(&mvp, length: 4 * 4 * 4, index: 1)

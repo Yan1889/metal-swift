@@ -26,15 +26,47 @@ float function_to_graph(float x, float z) {
 
 #define H (1e-5)
 
-kernel void f(constant float4 &inputs [[buffer(0)]],
-              device float4 &result [[buffer(1)]]) {
-    float y0 = function_to_graph(inputs[0]    , inputs[2]);
-    float y1 = function_to_graph(inputs[0] + H, inputs[2]);
-    float y2 = function_to_graph(inputs[0]    , inputs[2] + H);
-    result[0] = y0;
-    result[1] = (y1 - y0) / H;
-    result[2] = (y2 - y0) / H;
+float4 graph_normal_at(float x, float z) {
+    float y   = function_to_graph(x    , z);
+    float y_x = function_to_graph(x + H, z);
+    float y_z = function_to_graph(x    , z + H);
+    
+    float m_x = (y_x - y) / H;
+    float m_z = (y_z - y) / H;
+    
+    return normalize(float4(-m_x, 1, -m_z, 0));
 }
+
+kernel void moveBalls(constant float  &gravity    [[buffer(0)]],
+                      constant float  &bounciness [[buffer(1)]],
+                      device float4 *positions  [[buffer(2)]],
+                      device float4 *velocities [[buffer(3)]],
+                     uint id [[thread_position_in_grid]]) {
+    device float4 &pos = positions[id];
+    device float4 &vel = velocities[id];
+    
+    // numeric integration for position and velocity
+    pos += vel * 0.016;
+    vel.y += gravity * 0.016;
+    
+    if (abs(pos.x) > 1 || abs(pos.z) > 1) {
+        // ball is out of bounds, do not handle collision anymore
+        return;
+    }
+    
+    float y = function_to_graph(pos.x, pos.z);
+    
+    if (pos.y < y) {
+        // collision between ball and graph surface
+        float4 normal = graph_normal_at(pos.x, pos.z);
+        vel += -dot(vel, normal) * normal * (1 + bounciness);
+        
+        // position correction
+        float dy = y - pos.y;
+        pos += dy * normal;
+    }
+}
+
 
 kernel void generateMesh(constant int    &resolution [[buffer(0)]],
                          device VertexIn *vertices   [[buffer(1)]],
@@ -69,6 +101,7 @@ kernel void generateMesh(constant int    &resolution [[buffer(0)]],
         indices[startIdx + k] = (i + quad_indices[k][0]) * resolution + (j + quad_indices[k][1]);
     }
 }
+
 kernel void generateGrid(constant int      &line_count     [[buffer(0)]],
                          constant int      &segment_count  [[buffer(1)]],
                          constant float    &line_width     [[buffer(2)]],
