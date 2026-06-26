@@ -127,22 +127,29 @@ class Renderer: NSObject, MTKViewDelegate {
     
     func setupRenderPipeline_balls() {
         let vertexDescriptor = MTLVertexDescriptor()
+        // vertex position
         vertexDescriptor.attributes[0].bufferIndex = 0
         vertexDescriptor.attributes[0].offset = 0
         vertexDescriptor.attributes[0].format = .float4
-        
-        vertexDescriptor.attributes[1].bufferIndex = 0
-        vertexDescriptor.attributes[1].offset = MemoryLayout<SIMD4<Float>>.stride
+        // ball position
+        vertexDescriptor.attributes[1].bufferIndex = 1
+        vertexDescriptor.attributes[1].offset = 0
         vertexDescriptor.attributes[1].format = .float4
-        
-        vertexDescriptor.layouts[0].stride = MemoryLayout<Vertex>.stride
+        // vertex buffer
+        vertexDescriptor.layouts[0].stride = MemoryLayout<SIMD4<Float>>.stride
+        vertexDescriptor.layouts[0].stepFunction = .perVertex
+        vertexDescriptor.layouts[0].stepRate = 1
+        // position buffer
+        vertexDescriptor.layouts[1].stride = MemoryLayout<SIMD4<Float>>.stride
+        vertexDescriptor.layouts[1].stepFunction = .perInstance
+        vertexDescriptor.layouts[1].stepRate = 1
         
         let pipelineDescriptor = MTLRenderPipelineDescriptor()
         pipelineDescriptor.vertexDescriptor = vertexDescriptor
         pipelineDescriptor.colorAttachments[0].pixelFormat = view.colorPixelFormat
         pipelineDescriptor.depthAttachmentPixelFormat = view.depthStencilPixelFormat
-        pipelineDescriptor.vertexFunction = lib.makeFunction(name: "ballsShader")!
-        pipelineDescriptor.fragmentFunction = lib.makeFunction(name: "fragmentShader")!
+        pipelineDescriptor.vertexFunction = lib.makeFunction(name: "vertexBall")!
+        pipelineDescriptor.fragmentFunction = lib.makeFunction(name: "fragmentBall")!
         
         let attachment = pipelineDescriptor.colorAttachments[0]!
         attachment.isBlendingEnabled = true
@@ -499,8 +506,8 @@ class Renderer: NSObject, MTKViewDelegate {
         // balls
         encoder.setRenderPipelineState(renderPSO_balls)
         encoder.setVertexBuffer(vertexBuffer_balls, offset: 0, index: 0)
-        encoder.setVertexBytes(&projection_view, length: 64, index: 1)
-        encoder.setVertexBuffer(ball_positions, offset: 0, index: 2)
+        encoder.setVertexBuffer(ball_positions, offset: 0, index: 1)
+        encoder.setVertexBytes(&projection_view, length: 64, index: 2)
         encoder.drawIndexedPrimitives(
             type: .triangle,
             indexCount: 6 * ball_resolution * ball_resolution,

@@ -32,7 +32,7 @@ func makeMesh_ball(
     resolution: Int,
     device: MTLDevice,
 ) -> (MTLBuffer, MTLBuffer) {
-    var vertices: [Vertex] = []
+    var vertices: [SIMD4<Float>] = []
     var indices: [UInt32] = []
     
     for i in 0..<UInt32(resolution) {
@@ -44,10 +44,7 @@ func makeMesh_ball(
             let y = radius * cos(lat)
             let z = radius * sin(lat) * sin(long)
             
-            vertices.append(Vertex(
-                pos: SIMD4<Float>(x, y, z, 1),
-                col: color,
-            ))
+            vertices.append([x, y, z, 1])
             
             let r = UInt32(resolution)
             for arr in quad_indices {

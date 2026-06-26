@@ -41,7 +41,7 @@ kernel void moveBalls(constant float  &gravity    [[buffer(0)]],
                       constant float  &bounciness [[buffer(1)]],
                       device float4 *positions  [[buffer(2)]],
                       device float4 *velocities [[buffer(3)]],
-                     uint id [[thread_position_in_grid]]) {
+                      uint id [[thread_position_in_grid]]) {
     device float4 &pos = positions[id];
     device float4 &vel = velocities[id];
     
