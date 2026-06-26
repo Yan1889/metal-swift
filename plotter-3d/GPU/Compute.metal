@@ -12,8 +12,8 @@ kernel void initBalls(constant int &ball_side_count [[buffer(0)]],
                       device float4 *velocities     [[buffer(2)]],
                       uint id [[thread_position_in_grid]]) {
     
-    float x = 2.0 * float(id / ball_side_count) / ball_side_count - 1;
-    float z = 2.0 * float(id % ball_side_count) / ball_side_count - 1;
+    float x = 2.0 * float(id / ball_side_count) / (ball_side_count - 1) - 1;
+    float z = 2.0 * float(id % ball_side_count) / (ball_side_count - 1) - 1;
     
     positions[id] = float4(x, 2, z, 1);
     velocities[id] = float4(0, 0, 0, 0);

@@ -96,7 +96,7 @@ struct SettingsPanel: View {
                             get: { log(Double(settings.push.resolution_graph)) },
                             set: { settings.push.resolution_graph = Int(exp(Double($0))) }
                         ),
-                        in: 1...7
+                        in: 1...8
                     )
                     TextField(
                         "",

@@ -19,7 +19,7 @@ struct ContentView: View {
             resolution_grid_lines: 10,
             resolution_grid_segments: 100,
             grid_thickness: 0.01,
-            fun: "x * x + z * z",
+            fun: "1 - sqrt(1 - x * x - z * z)",
             shouldReset: false
         ),
         pull: PullSettings(
