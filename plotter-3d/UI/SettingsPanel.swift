@@ -91,19 +91,21 @@ struct SettingsPanel: View {
                     onChange: { },
                 )
                 HStack {
+                    Spacer()
                     Toggle("Hide Balls", isOn: $settings.pull.ballsHidden)
                         .toggleStyle(.switch)
-                    
+                    Spacer()
                     Button("Reset Balls") {
                         settings.push.shouldResetBalls = true
                     }
-                    
+                    Spacer()
                     Button {
                         settings.pull.ballsPaused.toggle()
                     }
                     label: {
                         Image(systemName: settings.pull.ballsPaused ? "play.fill" : "pause.fill")
                     }
+                    Spacer()
                 }
             }
             
