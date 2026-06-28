@@ -19,10 +19,12 @@ struct BallVertexOut {
 };
 
 vertex BallVertexOut vertexBall(BallVertexIn in [[stage_in]],
-                                constant float4x4 &projection_view [[buffer(2)]]) {
+                                constant float4x4 &projection_view [[buffer(2)]],
+                                constant float    &radius [[buffer(3)]]) {
     
     BallVertexOut out;
-    out.pos = projection_view * float4(in.vertPos.xyz + in.ballPos.xyz, 1.0);
+    float3 vertexPos = in.vertPos.xyz * radius;
+    out.pos = projection_view * float4(vertexPos + in.ballPos.xyz, 1.0);
     return out;
 }
 

@@ -47,7 +47,7 @@ kernel void moveBalls(constant float  &gravity    [[buffer(0)]],
     
     // numeric integration for position and velocity
     pos += vel * 0.016;
-    vel.y += gravity * 0.016;
+    vel.y -= gravity * 0.016;
     
     if (abs(pos.x) > 1 || abs(pos.z) > 1) {
         // ball is out of bounds, do not handle collision anymore

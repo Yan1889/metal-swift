@@ -20,7 +20,7 @@ struct ContentView: View {
             resolution_grid_segments: 100,
             grid_thickness: 0.01,
             fun: "1 - sqrt(1 - x * x - z * z)",
-            shouldReset: false
+            shouldResetBalls: false
         ),
         pull: PullSettings(
             cam_pitch: 0,
@@ -28,8 +28,9 @@ struct ContentView: View {
             cam_dist: 5,
             compiled: true,
             paused: true,
+            ballRadius: 0.01,
             bounciness: 1,
-            gravity: -2,
+            gravity: 1,
         )
     )
     

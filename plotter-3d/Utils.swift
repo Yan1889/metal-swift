@@ -26,7 +26,6 @@ public let quad_indices: [[UInt32]] = [
 
 /// returns the mesh of a ball with radius 1
 func makeMesh_ball(
-    radius: Float,
     pos: SIMD4<Float>,
     color: SIMD4<Float>,
     resolution: Int,
@@ -38,11 +37,12 @@ func makeMesh_ball(
     for i in 0..<UInt32(resolution) {
         for j in 0..<UInt32(resolution) {
             let long = Float(i) / Float(resolution - 1) * .pi * 2
+    
             let lat  = Float(j) / Float(resolution - 1) * .pi
             
-            let x = radius * sin(lat) * cos(long)
-            let y = radius * cos(lat)
-            let z = radius * sin(lat) * sin(long)
+            let x = sin(lat) * cos(long)
+            let y = cos(lat)
+            let z = sin(lat) * sin(long)
             
             vertices.append([x, y, z, 1])
             

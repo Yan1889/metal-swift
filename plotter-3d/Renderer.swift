@@ -49,8 +49,8 @@ class Renderer: NSObject, MTKViewDelegate {
     private var settings: Binding<Settings>
     private var previousPushSettings: PushSettings
     
-    private let ball_count: Int = 10_000_000
-    private let ball_resolution: Int = 4
+    private let ball_count: Int = 100
+    private let ball_resolution: Int = 8
     
     // helpers
     private var pullSets: PullSettings { settings.pull.wrappedValue }
@@ -371,7 +371,6 @@ class Renderer: NSObject, MTKViewDelegate {
     func setupBalls() {
         // create a single mesh
         (vertexBuffer_balls, indexBuffer_balls) = makeMesh_ball(
-            radius: 0.003,
             pos: [0, 0, 0, 1],
             color: [1, 1, 1, 1],
             resolution: ball_resolution,
@@ -434,9 +433,9 @@ class Renderer: NSObject, MTKViewDelegate {
             settings.pull.compiled.wrappedValue = updateMeshPipeline()
         }
         
-        if pushSets.shouldReset {
+        if pushSets.shouldResetBalls {
             setupBalls()
-            settings.push.shouldReset.wrappedValue = false
+            settings.push.shouldResetBalls.wrappedValue = false
         }
         
         if (!pullSets.paused) {
@@ -508,6 +507,7 @@ class Renderer: NSObject, MTKViewDelegate {
         encoder.setVertexBuffer(vertexBuffer_balls, offset: 0, index: 0)
         encoder.setVertexBuffer(ball_positions, offset: 0, index: 1)
         encoder.setVertexBytes(&projection_view, length: 64, index: 2)
+        encoder.setVertexBytes(&settings.pull.ballRadius.wrappedValue, length: 4, index: 3)
         encoder.drawIndexedPrimitives(
             type: .triangle,
             indexCount: 6 * ball_resolution * ball_resolution,
