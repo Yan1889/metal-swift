@@ -15,9 +15,9 @@ struct PullSettings {
     var cam_yaw: Float
     var cam_dist: Float
     var compiled: Bool
+    // balls
     var paused: Bool
     var ballRadius: Float
-    // physics
     var bounciness: Float
     var gravity: Float
 }
@@ -29,6 +29,8 @@ struct PushSettings: Equatable {
     var grid_thickness: Float
     var fun: String
     var shouldResetBalls: Bool
+    var ballCount: Int
+    var fallHeight: Float
 }
 
 enum ColorSettings: Equatable {

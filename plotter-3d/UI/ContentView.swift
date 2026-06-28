@@ -20,7 +20,9 @@ struct ContentView: View {
             resolution_grid_segments: 100,
             grid_thickness: 0.01,
             fun: "1 - sqrt(1 - x * x - z * z)",
-            shouldResetBalls: false
+            shouldResetBalls: false,
+            ballCount: 100,
+            fallHeight: 1,
         ),
         pull: PullSettings(
             cam_pitch: 0,

@@ -49,7 +49,6 @@ class Renderer: NSObject, MTKViewDelegate {
     private var settings: Binding<Settings>
     private var previousPushSettings: PushSettings
     
-    private let ball_count: Int = 100
     private let ball_resolution: Int = 8
     
     // helpers
@@ -378,13 +377,13 @@ class Renderer: NSObject, MTKViewDelegate {
         )
         
         // init the positions
-        ball_positions = device.makeBuffer(length: ball_count * 16)
-        ball_velocities = device.makeBuffer(length: ball_count * 16)
+        ball_positions = device.makeBuffer(length: pushSets.ballCount * 16)
+        ball_velocities = device.makeBuffer(length: pushSets.ballCount * 16)
         
-        var balls_side_count = Int32(round(sqrt(Float(ball_count))))
+        var balls_side_count = Int32(round(sqrt(Float(pushSets.ballCount))))
         print(balls_side_count)
         
-        let threads_grid = MTLSize(width: ball_count, height: 1, depth: 1)
+        let threads_grid = MTLSize(width: pushSets.ballCount, height: 1, depth: 1)
         let threads_per_group = MTLSize(width: computePSO_initBalls.threadExecutionWidth, height: 1, depth: 1)
         
         let commandBuffer = commandQueue.makeCommandBuffer()!
@@ -405,7 +404,7 @@ class Renderer: NSObject, MTKViewDelegate {
         let commandBuffer = commandQueue.makeCommandBuffer()!
         let encoder = commandBuffer.makeComputeCommandEncoder()!
         
-        let threads_grid = MTLSize(width: ball_count, height: 1, depth: 1)
+        let threads_grid = MTLSize(width: pushSets.ballCount, height: 1, depth: 1)
         let threads_per_group = MTLSize(width: computePSO_moveBalls.threadExecutionWidth, height: 1, depth: 1)
         
         encoder.setComputePipelineState(computePSO_moveBalls)
@@ -514,7 +513,7 @@ class Renderer: NSObject, MTKViewDelegate {
             indexType: .uint32,
             indexBuffer: indexBuffer_balls,
             indexBufferOffset: 0,
-            instanceCount: ball_count,
+            instanceCount: pushSets.ballCount,
         )
         
         encoder.setRenderPipelineState(renderPSO)

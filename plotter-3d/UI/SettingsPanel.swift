@@ -46,30 +46,43 @@ struct SettingsPanel: View {
             Spacer()
             DisclosureGroup("Balls", isExpanded: $ballsExpanded) {
                 make_slider(
-                    label: "Bounciness:",
+                    label: "Bounciness",
                     val: $settings.pull.bounciness,
                     range: 0...1,
                     interpolation: .linear,
                     fromDouble: Float.init,
-                    toDouble: Double.init
+                    toDouble: Double.init,
+                    onChange: { },
                 )
                 
                 make_slider(
-                    label: "Gravity:",
+                    label: "Gravity",
                     val: $settings.pull.gravity,
                     range: 0.001...10,
                     interpolation: .linear,
                     fromDouble: Float.init,
                     toDouble: Double.init,
+                    onChange: { },
                 )
                 
                 make_slider(
-                    label: "Ball Radius:",
+                    label: "Ball Radius",
                     val: $settings.pull.ballRadius,
                     range: 0.001...0.1,
                     interpolation: .exponential,
                     fromDouble: Float.init,
-                    toDouble: Double.init
+                    toDouble: Double.init,
+                    onChange: { },
+                )
+                
+                make_slider(
+                    label: "Ball Count",
+                    val: $settings.push.ballCount,
+                    range: 1...1_000_00,
+                    interpolation: .exponential,
+                    fromDouble: Int.init,
+                    toDouble: Double.init,
+                    onChange: { settings.push.shouldResetBalls = true },
                 )
                 
                 Button {
@@ -83,30 +96,33 @@ struct SettingsPanel: View {
             Spacer()
             DisclosureGroup("Graph", isExpanded: $graphExpanded) {
                 make_slider(
-                    label: "Graph Resolution:",
+                    label: "Graph Resolution",
                     val: $settings.push.resolution_graph,
                     range: 2...1000,
                     interpolation: .exponential,
                     fromDouble: Int.init,
                     toDouble: Double.init,
+                    onChange: { },
                 )
                 
                 make_slider(
-                    label: "Grid Line Count:",
+                    label: "Grid Line Count",
                     val: $settings.push.resolution_grid_lines,
                     range: 2...1000,
                     interpolation: .exponential,
                     fromDouble: Int.init,
                     toDouble: Double.init,
+                    onChange: { },
                 )
                 
                 make_slider(
-                    label: "Grid Line Segment Count:",
+                    label: "Grid Line Segment Count",
                     val: $settings.push.resolution_grid_segments,
                     range: 2...1000,
                     interpolation: .exponential,
                     fromDouble: Int.init,
                     toDouble: Double.init,
+                    onChange: { },
                 )
                 
                 make_slider(
@@ -116,6 +132,7 @@ struct SettingsPanel: View {
                     interpolation: .linear,
                     fromDouble: Float.init,
                     toDouble: Double.init,
+                    onChange: { },
                 )
             }
         }
@@ -133,6 +150,7 @@ struct SettingsPanel: View {
         interpolation: InterpolationType,
         fromDouble: @escaping (Double) -> I,
         toDouble: @escaping (I) -> Double,
+        onChange: @escaping () -> (),
     ) -> some View {
         let a = toDouble(range.lowerBound)
         let b = toDouble(range.upperBound)
@@ -149,7 +167,10 @@ struct SettingsPanel: View {
         }
         
         let getDouble = { toDouble(val.wrappedValue) }
-        let setDouble = { val.wrappedValue = fromDouble($0) }
+        let setDouble = {
+            onChange()
+            val.wrappedValue = fromDouble($0)
+        }
         
         return HStack {
             Text(label)
