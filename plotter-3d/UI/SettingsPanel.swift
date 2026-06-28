@@ -90,19 +90,20 @@ struct SettingsPanel: View {
                     toDouble: Double.init,
                     onChange: { },
                 )
-                
                 HStack {
-                    Button("Reset") {
+                    Toggle("Hide Balls", isOn: $settings.pull.ballsHidden)
+                        .toggleStyle(.switch)
+                    
+                    Button("Reset Balls") {
                         settings.push.shouldResetBalls = true
                     }
                     
                     Button {
-                        settings.pull.paused.toggle()
+                        settings.pull.ballsPaused.toggle()
                     }
                     label: {
-                        Image(systemName: settings.pull.paused ? "play.fill" : "pause.fill")
+                        Image(systemName: settings.pull.ballsPaused ? "play.fill" : "pause.fill")
                     }
-                    .fixedSize()
                 }
             }
             
@@ -207,7 +208,7 @@ struct SettingsPanel: View {
             TextField(
                 "",
                 value: Binding(get: getDouble, set: setDouble),
-                format: I.self == Int.self ? .number : .number.precision(.fractionLength(2))
+                format: I.self == Int.self ? .number : .number.precision(.fractionLength(3))
             )
             .monospacedDigit()
             .fixedSize()

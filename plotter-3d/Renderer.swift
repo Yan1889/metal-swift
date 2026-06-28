@@ -438,7 +438,7 @@ class Renderer: NSObject, MTKViewDelegate {
             settings.push.shouldResetBalls.wrappedValue = false
         }
         
-        if (!pullSets.paused) {
+        if (!pullSets.ballsPaused) {
             moveBalls()
         }
         
@@ -503,21 +503,26 @@ class Renderer: NSObject, MTKViewDelegate {
         }
         
         // balls
-        encoder.setRenderPipelineState(renderPSO_balls)
-        encoder.setVertexBuffer(vertexBuffer_balls, offset: 0, index: 0)
-        encoder.setVertexBuffer(ball_positions, offset: 0, index: 1)
-        encoder.setVertexBytes(&projection_view, length: 64, index: 2)
-        encoder.setVertexBytes(&settings.pull.ballRadius.wrappedValue, length: 4, index: 3)
-        encoder.drawIndexedPrimitives(
-            type: .triangle,
-            indexCount: 6 * ball_resolution * ball_resolution,
-            indexType: .uint32,
-            indexBuffer: indexBuffer_balls,
-            indexBufferOffset: 0,
-            instanceCount: pushSets.ballCount,
-        )
-        
-        encoder.setRenderPipelineState(renderPSO)
+        if (!pullSets.ballsHidden) {
+            // switch pipeline
+            encoder.setRenderPipelineState(renderPSO_balls)
+            
+            encoder.setVertexBuffer(vertexBuffer_balls, offset: 0, index: 0)
+            encoder.setVertexBuffer(ball_positions, offset: 0, index: 1)
+            encoder.setVertexBytes(&projection_view, length: 64, index: 2)
+            encoder.setVertexBytes(&settings.pull.ballRadius.wrappedValue, length: 4, index: 3)
+            encoder.drawIndexedPrimitives(
+                type: .triangle,
+                indexCount: 6 * ball_resolution * ball_resolution,
+                indexType: .uint32,
+                indexBuffer: indexBuffer_balls,
+                indexBufferOffset: 0,
+                instanceCount: pushSets.ballCount,
+            )
+            
+            // switch pipeline back
+            encoder.setRenderPipelineState(renderPSO)
+        }
         
         encoder.setVertexBuffer(vertexBuffer_x_z_plane, offset: 0, index: 0)
         encoder.setVertexBytes(&mvp, length: 4 * 4 * 4, index: 1)

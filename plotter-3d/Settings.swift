@@ -16,7 +16,8 @@ struct PullSettings {
     var cam_dist: Float
     var compiled: Bool
     // balls
-    var paused: Bool
+    var ballsPaused: Bool
+    var ballsHidden: Bool
     var ballRadius: Float
     var bounciness: Float
     var gravity: Float
