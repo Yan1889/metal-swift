@@ -40,11 +40,14 @@ struct SettingsPanel: View {
             }
             
             Spacer()
-            DisclosureGroup("Balls", isExpanded: $ballsExpanded) {
+            DisclosureGroup("Balls (\(settings.push.ballCount))", isExpanded: $ballsExpanded) {
                 make_slider(
-                    label: "Ball Count",
-                    val: $settings.push.ballCount,
-                    range: 1...1_000_00,
+                    label: "Ball count per side",
+                    val: Binding(
+                        get: { Int(sqrt(Double(settings.push.ballCount))) },
+                        set: { settings.push.ballCount = $0 * $0 },
+                    ),
+                    range: 1...1_000,
                     interpolation: .exponential,
                     fromDouble: Int.init,
                     toDouble: Double.init,

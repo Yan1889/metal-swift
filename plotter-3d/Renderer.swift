@@ -381,7 +381,13 @@ class Renderer: NSObject, MTKViewDelegate {
         ball_velocities = device.makeBuffer(length: pushSets.ballCount * 16)
         
         var balls_side_count = Int32(round(sqrt(Float(pushSets.ballCount))))
-        print(balls_side_count)
+        var height = settings.push.fallHeight.wrappedValue
+        
+        if balls_side_count == 1 {
+            ball_positions.contents().assumingMemoryBound(to: SIMD4<Float>.self)[0] = [0, height, 0, 0]
+            ball_velocities.contents().assumingMemoryBound(to: SIMD4<Float>.self)[0] = [0, 0, 0, 0]
+            return
+        }
         
         let threads_grid = MTLSize(width: pushSets.ballCount, height: 1, depth: 1)
         let threads_per_group = MTLSize(width: computePSO_initBalls.threadExecutionWidth, height: 1, depth: 1)
@@ -391,7 +397,7 @@ class Renderer: NSObject, MTKViewDelegate {
         
         encoder.setComputePipelineState(computePSO_initBalls)
         encoder.setBytes(&balls_side_count, length: 4, index: 0)
-        encoder.setBytes(&settings.push.fallHeight.wrappedValue, length: 4, index: 1)
+        encoder.setBytes(&height, length: 4, index: 1)
         encoder.setBuffer(ball_positions, offset: 0, index: 2)
         encoder.setBuffer(ball_velocities, offset: 0, index: 3)
         encoder.dispatchThreads(threads_grid, threadsPerThreadgroup: threads_per_group)
