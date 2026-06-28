@@ -22,7 +22,7 @@ struct ContentView: View {
             fun: "1 - sqrt(1 - x * x - z * z)",
             shouldResetBalls: false,
             ballCount: 100,
-            fallHeight: 1,
+            fallHeight: 2,
         ),
         pull: PullSettings(
             cam_pitch: 0,

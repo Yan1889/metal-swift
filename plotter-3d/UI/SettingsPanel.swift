@@ -37,28 +37,34 @@ struct SettingsPanel: View {
                     Button("Wave (inverted)") { settings.push.fun = "sin(x * z * 20) / 5 + 0.2" }
                     Button("Satellite Dish") { settings.push.fun = "x * x + z * z > 1 ? NAN : 0.125 * (x * x + z * z)" }
                 }
-                
-                Button("Reset") {
-                    settings.push.shouldResetBalls = true
-                }
             }
             
             Spacer()
             DisclosureGroup("Balls", isExpanded: $ballsExpanded) {
                 make_slider(
-                    label: "Bounciness",
-                    val: $settings.pull.bounciness,
-                    range: 0...1,
-                    interpolation: .linear,
-                    fromDouble: Float.init,
+                    label: "Ball Count",
+                    val: $settings.push.ballCount,
+                    range: 1...1_000_00,
+                    interpolation: .exponential,
+                    fromDouble: Int.init,
                     toDouble: Double.init,
-                    onChange: { },
+                    onChange: { settings.push.shouldResetBalls = true },
                 )
                 
                 make_slider(
-                    label: "Gravity",
-                    val: $settings.pull.gravity,
-                    range: 0.001...10,
+                    label: "Fall Height",
+                    val: $settings.push.fallHeight,
+                    range: 0...5,
+                    interpolation: .linear,
+                    fromDouble: Float.init,
+                    toDouble: Double.init,
+                    onChange: { settings.push.shouldResetBalls = true },
+                )
+                
+                make_slider(
+                    label: "Bounciness",
+                    val: $settings.pull.bounciness,
+                    range: 0...1,
                     interpolation: .linear,
                     fromDouble: Float.init,
                     toDouble: Double.init,
@@ -76,21 +82,28 @@ struct SettingsPanel: View {
                 )
                 
                 make_slider(
-                    label: "Ball Count",
-                    val: $settings.push.ballCount,
-                    range: 1...1_000_00,
-                    interpolation: .exponential,
-                    fromDouble: Int.init,
+                    label: "Gravity",
+                    val: $settings.pull.gravity,
+                    range: 0.001...10,
+                    interpolation: .linear,
+                    fromDouble: Float.init,
                     toDouble: Double.init,
-                    onChange: { settings.push.shouldResetBalls = true },
+                    onChange: { },
                 )
                 
-                Button {
-                    settings.pull.paused.toggle()
-                } label: {
-                    Image(systemName: settings.pull.paused ? "play.fill" : "pause.fill")
+                HStack {
+                    Button("Reset") {
+                        settings.push.shouldResetBalls = true
+                    }
+                    
+                    Button {
+                        settings.pull.paused.toggle()
+                    }
+                    label: {
+                        Image(systemName: settings.pull.paused ? "play.fill" : "pause.fill")
+                    }
+                    .fixedSize()
                 }
-                .fixedSize()
             }
             
             Spacer()

@@ -391,8 +391,9 @@ class Renderer: NSObject, MTKViewDelegate {
         
         encoder.setComputePipelineState(computePSO_initBalls)
         encoder.setBytes(&balls_side_count, length: 4, index: 0)
-        encoder.setBuffer(ball_positions, offset: 0, index: 1)
-        encoder.setBuffer(ball_velocities, offset: 0, index: 2)
+        encoder.setBytes(&settings.push.fallHeight.wrappedValue, length: 4, index: 1)
+        encoder.setBuffer(ball_positions, offset: 0, index: 2)
+        encoder.setBuffer(ball_velocities, offset: 0, index: 3)
         encoder.dispatchThreads(threads_grid, threadsPerThreadgroup: threads_per_group)
         
         encoder.endEncoding()
