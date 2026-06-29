@@ -14,16 +14,18 @@ struct BallVertexOut {
     float size [[point_size]];
 };
 
-vertex BallVertexOut vertexBall(constant float4x4 &projection_view [[buffer(0)]],
-                                constant float2   &viewportSize [[buffer(1)]],
-                                constant float    &radius [[buffer(2)]],
-                                constant float4   *positions [[buffer(3)]],
+vertex BallVertexOut vertexBall(constant float4x4 &projection   [[buffer(0)]],
+                                constant float4x4 &view         [[buffer(1)]],
+                                constant float2   &viewportSize [[buffer(2)]],
+                                constant float    &radius       [[buffer(3)]],
+                                constant float4   *positions    [[buffer(4)]],
                                 uint vid [[vertex_id]]) {
     
+    float4 viewPos = view * positions[vid];
+    
     BallVertexOut out;
-    out.pos = projection_view * positions[vid];
-    float dist = out.pos.w;
-    out.size = radius * viewportSize.y * projection_view[1][1] / dist;
+    out.pos = projection * viewPos;
+    out.size = radius * viewportSize.y * projection[1][1] / -viewPos.z;
     
     return out;
 }

@@ -431,19 +431,19 @@ class Renderer: NSObject, MTKViewDelegate {
         )
         
         let model = matrix_identity_float4x4
-        let view = lookAt(
+        var view = lookAt(
             eye: cam_pos,
             center: SIMD3<Float>(0,0,0),
             up: SIMD3<Float>(0,1,0)
         )
         
-        let projection = make_perspective_matrix(
+        var projection = make_perspective_matrix(
             fovY: .pi / 3,
             aspect: 1,
             near: 0.1,
             far: 100,
         )
-        var projection_view = projection * view
+        let projection_view = projection * view
         var mvp = projection_view * model
         
         let commandBuffer = commandQueue.makeCommandBuffer()!
@@ -476,7 +476,7 @@ class Renderer: NSObject, MTKViewDelegate {
             l.encode(encoder: encoder, projection_view: projection_view)
         }
         
-        // balls
+        // balls4
         if (!pullSets.ballsHidden) {
             // switch pipeline
             encoder.setRenderPipelineState(renderPSO_balls)
@@ -486,10 +486,11 @@ class Renderer: NSObject, MTKViewDelegate {
                 Float(self.view.drawableSize.height),
             )
             
-            encoder.setVertexBytes(&projection_view, length: 64, index: 0)
-            encoder.setVertexBytes(&framebufferSize, length: 8, index: 1)
-            encoder.setVertexBytes(&settings.pull.ballRadius.wrappedValue, length: 4, index: 2)
-            encoder.setVertexBuffer(ball_positions, offset: 0, index: 3)
+            encoder.setVertexBytes(&projection, length: 64, index: 0)
+            encoder.setVertexBytes(&view, length: 64, index: 1)
+            encoder.setVertexBytes(&framebufferSize, length: 8, index: 2)
+            encoder.setVertexBytes(&settings.pull.ballRadius.wrappedValue, length: 4, index: 3)
+            encoder.setVertexBuffer(ball_positions, offset: 0, index: 4)
             encoder.drawPrimitives(type: .point, vertexStart: 0, vertexCount: pushSets.ballCount)
             
             // switch pipeline back
@@ -509,8 +510,6 @@ class Renderer: NSObject, MTKViewDelegate {
         encoder.endEncoding()
         commandBuffer.present(draw)
         commandBuffer.commit()
-        
-        commandBuffer.waitUntilCompleted()
     }
     
     func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {

@@ -57,7 +57,7 @@ struct SettingsPanel: View {
                         get: { Int(sqrt(Double(settings.push.ballCount))) },
                         set: { settings.push.ballCount = $0 * $0 },
                     ),
-                    range: 1...10_000,
+                    range: 1...5_000,
                     interpolation: .exponential,
                     fromDouble: Int.init,
                     toDouble: Double.init,

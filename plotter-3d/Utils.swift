@@ -13,59 +13,6 @@ struct Vertex {
     let col: SIMD4<Float>
 }
 
-public let quad_indices: [[UInt32]] = [
-    // triangle #1
-    [0, 0],
-    [1, 0],
-    [1, 1],
-    // triangle #2
-    [0, 0],
-    [0, 1],
-    [1, 1],
-]
-
-/// returns the mesh of a ball with radius 1
-func makeMesh_ball(
-    pos: SIMD4<Float>,
-    color: SIMD4<Float>,
-    resolution: Int,
-    device: MTLDevice,
-) -> (MTLBuffer, MTLBuffer) {
-    var vertices: [SIMD4<Float>] = []
-    var indices: [UInt32] = []
-    
-    for i in 0..<UInt32(resolution) {
-        for j in 0..<UInt32(resolution) {
-            let long = Float(i) / Float(resolution - 1) * .pi * 2
-    
-            let lat  = Float(j) / Float(resolution - 1) * .pi
-            
-            let x = sin(lat) * cos(long)
-            let y = cos(lat)
-            let z = sin(lat) * sin(long)
-            
-            vertices.append([x, y, z, 1])
-            
-            let r = UInt32(resolution)
-            for arr in quad_indices {
-                indices.append(((i + arr[0]) % r) * r + (j + arr[1]) % r)
-            }
-        }
-    }
-    
-    let vertexBuffer = device.makeBuffer(
-        bytes: vertices,
-        length: vertices.count * MemoryLayout<Vertex>.stride
-    )!
-    
-    let indexBuffer = device.makeBuffer(
-        bytes: indices,
-        length: indices.count * 4
-    )!
-    
-    return (vertexBuffer, indexBuffer)
-}
-
 func make_translation_matrix(_ x: Float, _ y: Float, _ z: Float) -> matrix_float4x4 {
     matrix_float4x4(
         SIMD4<Float>(1, 0, 0, 0),
