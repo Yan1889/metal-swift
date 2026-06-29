@@ -9,26 +9,30 @@
 
 // --- only for balls ---
 
-struct BallVertexIn {
-    float4 vertPos [[attribute(0)]];
-    float4 ballPos [[attribute(1)]];
-};
-
 struct BallVertexOut {
     float4 pos [[position]];
+    float size [[point_size]];
 };
 
-vertex BallVertexOut vertexBall(BallVertexIn in [[stage_in]],
-                                constant float4x4 &projection_view [[buffer(2)]],
-                                constant float    &radius [[buffer(3)]]) {
+vertex BallVertexOut vertexBall(constant float4x4 &projection_view [[buffer(0)]],
+                                constant float2   &viewportSize [[buffer(1)]],
+                                constant float    &radius [[buffer(2)]],
+                                constant float4   *positions [[buffer(3)]],
+                                uint vid [[vertex_id]]) {
     
     BallVertexOut out;
-    float3 vertexPos = in.vertPos.xyz * radius;
-    out.pos = projection_view * float4(vertexPos + in.ballPos.xyz, 1.0);
+    out.pos = projection_view * positions[vid];
+    float dist = out.pos.w;
+    out.size = radius * viewportSize.y * projection_view[1][1] / dist;
+    
     return out;
 }
 
-fragment float4 fragmentBall() {
+fragment float4 fragmentBall(float2 coord [[point_coord]]) {
+    float2 centered = 2.0 * coord - 1.0;
+    if (dot(centered, centered) > 1) {
+        discard_fragment();
+    }
     return float4(1); // white
 }
 

@@ -38,13 +38,13 @@ struct SettingsPanel: View {
                     Button("Satellite Dish") { settings.push.fun = "x * x + z * z > 1 ? NAN : 0.125 * (x * x + z * z)" }
                 }
                 HStack {
-                    let lambda = "([](float x, float z){return \(settings.push.fun);})"
+                    let f = "([](float x, float z){return \(settings.push.fun);})"
                     
                     Button("∂y/∂x") {
-                        settings.push.fun = "(\(lambda)(x + H, z) - \(lambda)(x, z)) / H"
+                        settings.push.fun = "(\(f)(x + H, z) - \(f)(x - H, z)) / (2.0 * H)"
                     }
                     Button("∂y/∂z") {
-                        settings.push.fun = "(\(lambda)(x, z + H) - \(lambda)(x, z)) / H"
+                        settings.push.fun = "(\(f)(x, z + H) - \(f)(x, z - H)) / (2.0 * H)"
                     }
                 }
             }
@@ -57,7 +57,7 @@ struct SettingsPanel: View {
                         get: { Int(sqrt(Double(settings.push.ballCount))) },
                         set: { settings.push.ballCount = $0 * $0 },
                     ),
-                    range: 1...1_000,
+                    range: 1...10_000,
                     interpolation: .exponential,
                     fromDouble: Int.init,
                     toDouble: Double.init,

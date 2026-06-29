@@ -24,11 +24,9 @@ class Renderer: NSObject, MTKViewDelegate {
     private var vertexBuffer_graph    : MTLBuffer!
     private var vertexBuffer_grid     : MTLBuffer!
     private var vertexBuffer_x_z_plane: MTLBuffer!
-    private var vertexBuffer_balls    : MTLBuffer!
     private var indexBuffer_graph     : MTLBuffer!
     private var indexBuffer_grid      : MTLBuffer!
     private var indexBuffer_x_z_plane : MTLBuffer!
-    private var indexBuffer_balls     : MTLBuffer!
     
     private var ball_velocities: MTLBuffer!
     private var ball_positions : MTLBuffer!
@@ -48,8 +46,6 @@ class Renderer: NSObject, MTKViewDelegate {
     
     private var settings: Binding<Settings>
     private var previousPushSettings: PushSettings
-    
-    private let ball_resolution: Int = 8
     
     // helpers
     private var pullSets: PullSettings { settings.pull.wrappedValue }
@@ -125,26 +121,7 @@ class Renderer: NSObject, MTKViewDelegate {
     }
     
     func setupRenderPipeline_balls() {
-        let vertexDescriptor = MTLVertexDescriptor()
-        // vertex position
-        vertexDescriptor.attributes[0].bufferIndex = 0
-        vertexDescriptor.attributes[0].offset = 0
-        vertexDescriptor.attributes[0].format = .float4
-        // ball position
-        vertexDescriptor.attributes[1].bufferIndex = 1
-        vertexDescriptor.attributes[1].offset = 0
-        vertexDescriptor.attributes[1].format = .float4
-        // vertex buffer
-        vertexDescriptor.layouts[0].stride = MemoryLayout<SIMD4<Float>>.stride
-        vertexDescriptor.layouts[0].stepFunction = .perVertex
-        vertexDescriptor.layouts[0].stepRate = 1
-        // position buffer
-        vertexDescriptor.layouts[1].stride = MemoryLayout<SIMD4<Float>>.stride
-        vertexDescriptor.layouts[1].stepFunction = .perInstance
-        vertexDescriptor.layouts[1].stepRate = 1
-        
         let pipelineDescriptor = MTLRenderPipelineDescriptor()
-        pipelineDescriptor.vertexDescriptor = vertexDescriptor
         pipelineDescriptor.colorAttachments[0].pixelFormat = view.colorPixelFormat
         pipelineDescriptor.depthAttachmentPixelFormat = view.depthStencilPixelFormat
         pipelineDescriptor.vertexFunction = lib.makeFunction(name: "vertexBall")!
@@ -285,7 +262,6 @@ class Renderer: NSObject, MTKViewDelegate {
 
         encoder.endEncoding()
         commandBuffer.commit()
-        commandBuffer.waitUntilCompleted()
         
         print("buffer generation ~ \(clock.now - start)")
     }
@@ -368,14 +344,6 @@ class Renderer: NSObject, MTKViewDelegate {
     }
     
     func setupBalls() {
-        // create a single mesh
-        (vertexBuffer_balls, indexBuffer_balls) = makeMesh_ball(
-            pos: [0, 0, 0, 1],
-            color: [1, 1, 1, 1],
-            resolution: ball_resolution,
-            device: device,
-        )
-        
         // init the positions
         ball_positions = device.makeBuffer(length: pushSets.ballCount * 16)
         ball_velocities = device.makeBuffer(length: pushSets.ballCount * 16)
@@ -513,18 +481,16 @@ class Renderer: NSObject, MTKViewDelegate {
             // switch pipeline
             encoder.setRenderPipelineState(renderPSO_balls)
             
-            encoder.setVertexBuffer(vertexBuffer_balls, offset: 0, index: 0)
-            encoder.setVertexBuffer(ball_positions, offset: 0, index: 1)
-            encoder.setVertexBytes(&projection_view, length: 64, index: 2)
-            encoder.setVertexBytes(&settings.pull.ballRadius.wrappedValue, length: 4, index: 3)
-            encoder.drawIndexedPrimitives(
-                type: .triangle,
-                indexCount: 6 * ball_resolution * ball_resolution,
-                indexType: .uint32,
-                indexBuffer: indexBuffer_balls,
-                indexBufferOffset: 0,
-                instanceCount: pushSets.ballCount,
+            var framebufferSize = SIMD2<Float>(
+                Float(self.view.drawableSize.width),
+                Float(self.view.drawableSize.height),
             )
+            
+            encoder.setVertexBytes(&projection_view, length: 64, index: 0)
+            encoder.setVertexBytes(&framebufferSize, length: 8, index: 1)
+            encoder.setVertexBytes(&settings.pull.ballRadius.wrappedValue, length: 4, index: 2)
+            encoder.setVertexBuffer(ball_positions, offset: 0, index: 3)
+            encoder.drawPrimitives(type: .point, vertexStart: 0, vertexCount: pushSets.ballCount)
             
             // switch pipeline back
             encoder.setRenderPipelineState(renderPSO)
@@ -543,6 +509,8 @@ class Renderer: NSObject, MTKViewDelegate {
         encoder.endEncoding()
         commandBuffer.present(draw)
         commandBuffer.commit()
+        
+        commandBuffer.waitUntilCompleted()
     }
     
     func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {

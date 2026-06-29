@@ -17,7 +17,7 @@ struct VertexIn {
     float4 color [[attribute(1)]];
 };
 
-#define H (1e-5)
+#define H (1e-4f)
 
 float function_to_graph(float x, float z) {
     // __BODY__
@@ -62,8 +62,9 @@ kernel void moveBalls(constant float  &gravity    [[buffer(0)]],
         vel += -dot(vel, normal) * normal * (1 + bounciness);
         
         // position correction
-        float dy = y - pos.y;
-        pos += dy * normal;
+        // float dy = y - pos.y;
+        // pos += dy * normal;
+        pos.y = y;
     }
 }
 

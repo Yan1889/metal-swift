@@ -5,7 +5,7 @@ Written in Swift with the SwiftUI framework and with the Metal Graphics API.
 ## Features
 
 - plot custom graphs, with many build in functions
-    - available operators: + - \* /
+    - available operators: + - * /
     - available functions (trigonometric): sin, cos, tan, asin, acos, atan, atan2, sinh, cosh, tanh
     - available functions (exponential): pow, sqrt, exp, log, log2, log10
     - available functions (conditional): abs, min, max
