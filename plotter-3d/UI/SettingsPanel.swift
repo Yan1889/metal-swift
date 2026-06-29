@@ -37,6 +37,16 @@ struct SettingsPanel: View {
                     Button("Wave (inverted)") { settings.push.fun = "sin(x * z * 20) / 5 + 0.2" }
                     Button("Satellite Dish") { settings.push.fun = "x * x + z * z > 1 ? NAN : 0.125 * (x * x + z * z)" }
                 }
+                HStack {
+                    let lambda = "([](float x, float z){return \(settings.push.fun);})"
+                    
+                    Button("∂y/∂x") {
+                        settings.push.fun = "(\(lambda)(x + H, z) - \(lambda)(x, z)) / H"
+                    }
+                    Button("∂y/∂z") {
+                        settings.push.fun = "(\(lambda)(x, z + H) - \(lambda)(x, z)) / H"
+                    }
+                }
             }
             
             Spacer()
