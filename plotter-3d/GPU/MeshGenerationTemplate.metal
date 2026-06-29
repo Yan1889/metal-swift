@@ -17,14 +17,14 @@ struct VertexIn {
     float4 color [[attribute(1)]];
 };
 
-#define H (1e-4f)
-
 float function_to_graph(float x, float z) {
     // __BODY__
     // ^ this gets replaced by "return \(real_expression);"
     return 0;
     // ^ 'default function' place holder
 }
+
+#define H (1e-3f)
 
 float4 graph_normal_at(float x, float z) {
     float y   = function_to_graph(x    , z);

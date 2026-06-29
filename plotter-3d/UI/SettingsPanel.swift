@@ -17,11 +17,13 @@ struct SettingsPanel: View {
     @State var ballsExpanded = true
     @State var graphExpanded = true
     
+    @State var h_limit = 0.01
+    
     var body: some View {
         VStack {
             DisclosureGroup("Function", isExpanded: $functionExpanded) {
                 HStack {
-                    Text("f(x, z) = ")
+                    Text("y = f(x, z) = ")
                     TextField("type an expression", text: $settings.push.fun)
                     Image(systemName: settings.pull.compiled ? "checkmark.circle.fill" : "xmark.circle.fill")
                         .foregroundStyle(settings.pull.compiled ? .green : .red)
@@ -32,19 +34,36 @@ struct SettingsPanel: View {
                     Button("Vase") { settings.push.fun = "x * x + z * z" }
                     Button("Cone") { settings.push.fun = "sqrt(x * x + z * z)" }
                     Button("Pringles") { settings.push.fun = "x * x - z * z + 1" }
-                    Button("Wave (1d)") { settings.push.fun = "sin(x * 20) / 5 + 0.2" }
+                    Button("Exponential") { settings.push.fun = "exp(x + z)" }
+                    Button("Gaussian Bump") { settings.push.fun = "exp(-5 * (x * x + z * z))" }
+                    Button("Satellite Dish") { settings.push.fun = "x * x + z * z > 1 ? NAN : 0.125 * (x * x + z * z)" }
+                    Button("Wave (1d)") { settings.push.fun = "(1 + sin(x * 20)) / 20" }
                     Button("Wave (2d)") { settings.push.fun = "sin((x * x + z * z) * 20) / 5 + 0.2" }
                     Button("Wave (inverted)") { settings.push.fun = "sin(x * z * 20) / 5 + 0.2" }
-                    Button("Satellite Dish") { settings.push.fun = "x * x + z * z > 1 ? NAN : 0.125 * (x * x + z * z)" }
                 }
+                
                 HStack {
+                    let h = h_limit
                     let f = "([](float x, float z){return \(settings.push.fun);})"
                     
+                    Picker("f' & f'' with h = ", selection: $h_limit) {
+                        Button("0.1")    {}.tag(0.1)
+                        Button("0.01")   {}.tag(0.01)
+                        Button("0.001")  {}.tag(0.001)
+                        Button("0.0001") {}.tag(0.0001)
+                    }
+                    //
                     Button("∂y/∂x") {
-                        settings.push.fun = "(\(f)(x + H, z) - \(f)(x - H, z)) / (2.0 * H)"
+                        settings.push.fun = "(\(f)(x + \(h), z) - \(f)(x, z)) / \(h)"
                     }
                     Button("∂y/∂z") {
-                        settings.push.fun = "(\(f)(x, z + H) - \(f)(x, z - H)) / (2.0 * H)"
+                        settings.push.fun = "(\(f)(x, z + \(h)) - \(f)(x, z)) / \(h)"
+                    }
+                    Button("∂^2y/∂x^2") {
+                        settings.push.fun = "(\(f)(x + \(2 * h), z) - 2 * \(f)(x + \(h), z) + \(f)(x, z)) / \(h * h)"
+                    }
+                    Button("∂^2y/∂z^2") {
+                        settings.push.fun = "(\(f)(x, z + \(2 * h)) - 2 * \(f)(x, z + \(h)) + \(f)(x, z)) / \(h * h)"
                     }
                 }
             }
@@ -52,7 +71,7 @@ struct SettingsPanel: View {
             Spacer()
             DisclosureGroup("Balls (\(settings.push.ballCount))", isExpanded: $ballsExpanded) {
                 make_slider(
-                    label: "Ball count per side",
+                    label: "Ball Count Per Side",
                     val: Binding(
                         get: { Int(sqrt(Double(settings.push.ballCount))) },
                         set: { settings.push.ballCount = $0 * $0 },
