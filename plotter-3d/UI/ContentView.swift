@@ -43,7 +43,7 @@ struct ContentView: View {
         }
         
         if isBlackHole {
-            BlackHole()
+            MetalView2()
         } else {
             HStack {
                 SettingsPanel(settings: $settings)
